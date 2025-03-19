@@ -42,16 +42,21 @@ const upload = multer({
 
 // Create Express app
 const app = express();
-const PORT = process.env.PORT || 3000; // Unified port for frontend and backend
+const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors()); // Enable CORS for development (adjust for production if needed)
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir));
 
-// Serve frontend static files from Vite's build output
-const clientBuildPath = path.join(__dirname, '../dist');
-app.use(express.static(clientBuildPath));
+// Determine if we're in production mode
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Serve frontend static files from Vite's build output in production
+if (isProduction) {
+  const clientBuildPath = path.join(__dirname, '../dist');
+  app.use(express.static(clientBuildPath));
+}
 
 // Database connection
 const dbConfig = {
@@ -767,9 +772,12 @@ app.get('/api/health', (req, res) => {
 });
 
 // Handle React Router (client-side routing)
-app.get('*', (req, res) => {
-  res.sendFile(path.join(clientBuildPath, 'index.html'));
-});
+// This should be the last route handler
+if (isProduction) {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  });
+}
 
 // Start server
 app.listen(PORT, () => {
