@@ -496,8 +496,16 @@ app.delete('/api/loan-applications/:id', authenticateToken, async (req, res) => 
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   try {
     const [applicationsCountResult] = await pool.query('SELECT COUNT(*) as count FROM loan_applications');
-    const [incomeResult] = await pool.query('SELECT SUM(amount) as total FROM cash_flow WHERE type IN ("income", "loan_repayment")');
-    const [expensesResult] = await pool.query('SELECT SUM(amount) as total FROM cash_flow WHERE type IN ("expense", "loan_disbursement")');
+    
+    // Updated query to include loan_repayment in income and loan_disbursement in expenses
+    const [incomeResult] = await pool.query(
+      'SELECT SUM(amount) as total FROM cash_flow WHERE type IN ("income", "loan_repayment")'
+    );
+    
+    const [expensesResult] = await pool.query(
+      'SELECT SUM(amount) as total FROM cash_flow WHERE type IN ("expense", "loan_disbursement")'
+    );
+    
     const [recentApplications] = await pool.query('SELECT * FROM loan_applications ORDER BY created_at DESC LIMIT 5');
     const [recentTransactions] = await pool.query('SELECT * FROM cash_flow ORDER BY date DESC LIMIT 5');
     

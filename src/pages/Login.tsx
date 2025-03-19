@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { login } from '../api/auth';
@@ -7,13 +7,13 @@ import { Loader2 } from 'lucide-react';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login: setAuth } = useAuth();
+  const { login: authLogin } = useAuth();
   const { showToast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     password: '',
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -22,29 +22,32 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
 
     try {
       const response = await login(formData.username, formData.password);
-      setAuth(response.token, response.user);
+      authLogin(response.token, response.user);
       showToast('success', 'Login Successful', 'Welcome back!');
       navigate('/');
     } catch (error) {
-      showToast('error', 'Login Failed', error instanceof Error ? error.message : 'An error occurred');
+      showToast('error', 'Login Failed', error instanceof Error ? error.message : 'Invalid credentials');
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Loan Management System
+            Sign in to your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to your account
+            Or{' '}
+            <Link to="/register" className="font-medium text-primary hover:text-primary-dark">
+              create a new account
+            </Link>
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -62,7 +65,7 @@ export default function Login() {
                 placeholder="Username"
                 value={formData.username}
                 onChange={handleChange}
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
             <div>
@@ -78,7 +81,7 @@ export default function Login() {
                 placeholder="Password"
                 value={formData.password}
                 onChange={handleChange}
-                disabled={isLoading}
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -86,23 +89,18 @@ export default function Login() {
           <div>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
             >
-              {isLoading ? (
-                <Loader2 className="animate-spin h-5 w-5 mr-2" />
-              ) : null}
-              Sign in
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin h-5 w-5 mr-2" />
+                  Signing in...
+                </>
+              ) : (
+                'Sign in'
+              )}
             </button>
-          </div>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <Link to="/register" className="font-medium text-primary hover:text-primary-dark">
-                Register here
-              </Link>
-            </p>
           </div>
         </form>
       </div>

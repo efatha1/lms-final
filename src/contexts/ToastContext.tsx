@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Toast, ToastType } from '../components/ui/toast';
+import { X } from 'lucide-react';
 
-interface ToastMessage {
+type ToastType = 'success' | 'error' | 'info' | 'warning';
+
+interface Toast {
   id: string;
   type: ToastType;
   title: string;
@@ -9,9 +11,7 @@ interface ToastMessage {
 }
 
 interface ToastContextType {
-  toasts: ToastMessage[];
   showToast: (type: ToastType, title: string, message: string) => void;
-  removeToast: (id: string) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -29,43 +29,65 @@ interface ToastProviderProps {
 }
 
 export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   const showToast = (type: ToastType, title: string, message: string) => {
     const id = Date.now().toString();
     setToasts((prevToasts) => [...prevToasts, { id, type, title, message }]);
-    
+
     // Auto-remove toast after 5 seconds
     setTimeout(() => {
-      removeToast(id);
+      setToasts((prevToasts) => prevToasts.filter((toast) => toast.id !== id));
     }, 5000);
   };
 
   const removeToast = (id: string) => {
-    setToasts((prevToasts) => prevToasts.filter(toast => toast.id !== id));
+    setToasts((prevToasts) => prevToasts.filter((toast) => toast.id !== id));
+  };
+
+  const getToastStyles = (type: ToastType) => {
+    switch (type) {
+      case 'success':
+        return 'bg-green-50 border-green-200 text-green-800';
+      case 'error':
+        return 'bg-red-50 border-red-200 text-red-800';
+      case 'warning':
+        return 'bg-yellow-50 border-yellow-200 text-yellow-800';
+      case 'info':
+        return 'bg-blue-50 border-blue-200 text-blue-800';
+      default:
+        return 'bg-gray-50 border-gray-200 text-gray-800';
+    }
   };
 
   return (
-    <ToastContext.Provider value={{ toasts, showToast, removeToast }}>
+    <ToastContext.Provider value={{ showToast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      
+      {/* Toast container */}
+      <div className="fixed bottom-0 right-0 p-4 space-y-4 z-50">
         {toasts.map((toast) => (
-          <div key={toast.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg border p-4">
-            <div className="flex items-start">
-              {toast.type === 'success' && <div className="w-4 h-4 bg-green-500 rounded-full mr-2 mt-1"></div>}
-              {toast.type === 'error' && <div className="w-4 h-4 bg-red-500 rounded-full mr-2 mt-1"></div>}
-              {toast.type === 'info' && <div className="w-4 h-4 bg-blue-500 rounded-full mr-2 mt-1"></div>}
-              {toast.type === 'warning' && <div className="w-4 h-4 bg-yellow-500 rounded-full mr-2 mt-1"></div>}
-              <div className="flex-1">
-                <h4 className="font-medium text-gray-900 dark:text-gray-100">{toast.title}</h4>
-                <p className="text-sm text-gray-600 dark:text-gray-300">{toast.message}</p>
+          <div
+            key={toast.id}
+            className={`max-w-md w-full shadow-lg rounded-lg pointer-events-auto border ${getToastStyles(
+              toast.type
+            )}`}
+          >
+            <div className="p-4">
+              <div className="flex items-start">
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{toast.title}</p>
+                  <p className="mt-1 text-sm">{toast.message}</p>
+                </div>
+                <div className="ml-4 flex-shrink-0 flex">
+                  <button
+                    onClick={() => removeToast(toast.id)}
+                    className="inline-flex text-gray-400 hover:text-gray-500 focus:outline-none"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
-              <button 
-                onClick={() => removeToast(toast.id)}
-                className="ml-4 text-gray-400 hover:text-gray-500"
-              >
-                ×
-              </button>
             </div>
           </div>
         ))}

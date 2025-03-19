@@ -45,3 +45,20 @@ export const fetchLoanApplicationsReport = async (
 
   return response.json();
 };
+
+export const fetchLoanRepaymentsReport = async (
+  token: string
+): Promise<any[]> => {
+  const response = await fetch(`${API_URL}/reports/loan-repayments`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to fetch loan repayments report');
+  }
+
+  return response.json();
+};

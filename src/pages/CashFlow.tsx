@@ -3,26 +3,23 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { fetchCashFlow, createCashFlow, updateCashFlow, deleteCashFlow } from '../api/cashFlow';
 import { PageContainer } from '../components/layout/PageContainer';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Card } from '../components/ui/card';
 import { Modal } from '../components/ui/modal';
 import { CashFlow } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { 
   Plus, 
   Search, 
-  Edit2, 
+  Edit, 
   Trash2, 
   TrendingUp, 
   TrendingDown,
+  DollarSign,
+  Calendar,
   Loader2,
   ChevronLeft,
-  ChevronRight,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Lock
-} from 'lucide-react';
-
-export default function CashFlowPage() {
+  ChevronRight
+} from 'lucide-react';export default function CashFlowPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
   const [transactions, setTransactions] = useState<CashFlow[]>([]);
@@ -48,17 +45,6 @@ export default function CashFlowPage() {
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Summary calculations
-  const totalIncome = transactions
-    .filter(t => t.type === 'income' || t.type === 'loan_repayment')
-    .reduce((sum, t) => sum + t.amount, 0);
-    
-  const totalExpenses = transactions
-    .filter(t => t.type === 'expense' || t.type === 'loan_disbursement')
-    .reduce((sum, t) => sum + t.amount, 0);
-    
-  const netCashFlow = totalIncome - totalExpenses;
 
   useEffect(() => {
     const loadTransactions = async () => {
@@ -69,7 +55,7 @@ export default function CashFlowPage() {
         setTransactions(data);
         setFilteredTransactions(data);
       } catch (error) {
-        showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to load cash flow data');
+        showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to load transactions');
       } finally {
         setIsLoading(false);
       }
@@ -89,7 +75,7 @@ export default function CashFlowPage() {
           transaction.description.toLowerCase().includes(lowercaseQuery) ||
           transaction.type.toLowerCase().includes(lowercaseQuery) ||
           transaction.amount.toString().includes(lowercaseQuery) ||
-          formatDate(transaction.date).toLowerCase().includes(lowercaseQuery)
+          formatDate(transaction.date).includes(lowercaseQuery)
       );
       setFilteredTransactions(filtered);
     }
@@ -102,6 +88,17 @@ export default function CashFlowPage() {
   const currentTransactions = filteredTransactions.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
 
+  // Calculate summary stats
+  const totalIncome = transactions
+    .filter(t => t.type === 'income' || t.type === 'loan_repayment')
+    .reduce((sum, t) => sum + t.amount, 0);
+    
+  const totalExpenses = transactions
+    .filter(t => t.type === 'expense' || t.type === 'loan_disbursement')
+    .reduce((sum, t) => sum + t.amount, 0);
+    
+  const netBalance = totalIncome - totalExpenses;
+
   const handleCreateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
@@ -109,7 +106,7 @@ export default function CashFlowPage() {
     setIsSubmitting(true);
     
     // Validate form
-    if (!formData.amount || !formData.description || !formData.date) {
+    if (!formData.type || !formData.amount || !formData.description || !formData.date) {
       showToast('error', 'Validation Error', 'Please fill in all required fields');
       setIsSubmitting(false);
       return;
@@ -126,7 +123,7 @@ export default function CashFlowPage() {
       // Update local state
       setTransactions([newTransaction, ...transactions]);
       
-      showToast('success', 'Transaction Created', 'Cash flow transaction created successfully');
+      showToast('success', 'Transaction Created', 'Cash flow entry created successfully');
       
       // Reset form and close modal
       resetForm();
@@ -145,7 +142,7 @@ export default function CashFlowPage() {
     setIsSubmitting(true);
     
     // Validate form
-    if (!formData.amount || !formData.description || !formData.date) {
+    if (!formData.type || !formData.amount || !formData.description || !formData.date) {
       showToast('error', 'Validation Error', 'Please fill in all required fields');
       setIsSubmitting(false);
       return;
@@ -164,7 +161,7 @@ export default function CashFlowPage() {
         t.id === selectedTransaction.id ? updatedTransaction : t
       ));
       
-      showToast('success', 'Transaction Updated', 'Cash flow transaction updated successfully');
+      showToast('success', 'Transaction Updated', 'Cash flow entry updated successfully');
       
       // Reset form and close modal
       resetForm();
@@ -189,10 +186,23 @@ export default function CashFlowPage() {
       // Update local state
       setTransactions(transactions.filter(t => t.id !== id));
       
-      showToast('success', 'Transaction Deleted', 'Cash flow transaction deleted successfully');
+      showToast('success', 'Transaction Deleted', 'Cash flow entry deleted successfully');
     } catch (error) {
       showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to delete transaction');
     }
+  };
+
+  const openEditModal = (transaction: CashFlow) => {
+    setSelectedTransaction(transaction);
+    setFormData({
+      type: transaction.type === 'loan_disbursement' || transaction.type === 'loan_repayment' 
+        ? transaction.type 
+        : transaction.type,
+      amount: transaction.amount.toString(),
+      description: transaction.description,
+      date: transaction.date,
+    });
+    setIsEditModalOpen(true);
   };
 
   const resetForm = () => {
@@ -202,64 +212,12 @@ export default function CashFlowPage() {
       description: '',
       date: new Date().toISOString().split('T')[0],
     });
+    setSelectedTransaction(null);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const openEditModal = (transaction: CashFlow) => {
-    // Check if this is a system-generated transaction
-    if (transaction.type === 'loan_disbursement' || transaction.type === 'loan_repayment') {
-      showToast('info', 'System Transaction', 'Loan-related transactions are generated automatically and cannot be edited');
-      return;
-    }
-    
-    setSelectedTransaction(transaction);
-    setFormData({
-      type: transaction.type,
-      amount: transaction.amount.toString(),
-      description: transaction.description,
-      date: new Date(transaction.date).toISOString().split('T')[0],
-    });
-    setIsEditModalOpen(true);
-  };
-
-  // Helper function to get transaction type icon and style
-  const getTransactionTypeInfo = (type: string) => {
-    switch(type) {
-      case 'income':
-        return {
-          icon: <TrendingUp className="h-3 w-3 mr-1" />,
-          className: 'bg-green-100 text-green-800',
-          label: 'Income'
-        };
-      case 'expense':
-        return {
-          icon: <TrendingDown className="h-3 w-3 mr-1" />,
-          className: 'bg-red-100 text-red-800',
-          label: 'Expense'
-        };
-      case 'loan_disbursement':
-        return {
-          icon: <ArrowUpRight className="h-3 w-3 mr-1" />,
-          className: 'bg-blue-100 text-blue-800',
-          label: 'Loan Disbursement'
-        };
-      case 'loan_repayment':
-        return {
-          icon: <ArrowDownLeft className="h-3 w-3 mr-1" />,
-          className: 'bg-purple-100 text-purple-800',
-          label: 'Loan Repayment'
-        };
-      default:
-        return {
-          icon: <TrendingUp className="h-3 w-3 mr-1" />,
-          className: 'bg-gray-100 text-gray-800',
-          label: type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')
-        };
-    }
   };
 
   if (isLoading) {
@@ -277,46 +235,41 @@ export default function CashFlowPage() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card>
-          <CardContent className="flex items-center py-4">
+          <div className="p-6 flex items-center">
             <div className="p-3 rounded-full bg-green-100 text-green-600 mr-4">
               <TrendingUp className="h-6 w-6" />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">Total Income</p>
-              <h3 className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</h3>
+              <h3 className="text-2xl font-bold text-gray-900">{formatCurrency(totalIncome)}</h3>
+              <p className="text-xs text-gray-500 mt-1">Including loan repayments</p>
             </div>
-          </CardContent>
+          </div>
         </Card>
         
         <Card>
-          <CardContent className="flex items-center py-4">
+          <div className="p-6 flex items-center">
             <div className="p-3 rounded-full bg-red-100 text-red-600 mr-4">
               <TrendingDown className="h-6 w-6" />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">Total Expenses</p>
-              <h3 className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</h3>
+              <h3 className="text-2xl font-bold text-gray-900">{formatCurrency(totalExpenses)}</h3>
+              <p className="text-xs text-gray-500 mt-1">Including loan disbursements</p>
             </div>
-          </CardContent>
+          </div>
         </Card>
         
         <Card>
-          <CardContent className="flex items-center py-4">
-            <div className={`p-3 rounded-full ${netCashFlow >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} mr-4`}>
-              {netCashFlow >= 0 ? (
-                <TrendingUp className="h-6 w-6" />
-              ) : (
-                <TrendingDown className="h-6 w-6" />
-              )}
+          <div className="p-6 flex items-center">
+            <div className="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
+              <DollarSign className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-500">Net Cash Flow</p>
-              <h3 className={`text-2xl font-bold ${netCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {formatCurrency(Math.abs(netCashFlow))}
-                {netCashFlow < 0 && ' (Deficit)'}
-              </h3>
+              <p className="text-sm font-medium text-gray-500">Net Balance</p>
+              <h3 className="text-2xl font-bold text-gray-900">{formatCurrency(netBalance)}</h3>
             </div>
-          </CardContent>
+          </div>
         </Card>
       </div>
       
@@ -338,10 +291,7 @@ export default function CashFlowPage() {
             </div>
             
             <button
-              onClick={() => {
-                resetForm();
-                setIsCreateModalOpen(true);
-              }}
+              onClick={() => setIsCreateModalOpen(true)}
               className="flex items-center justify-center px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
             >
               <Plus className="h-5 w-5 mr-2" />
@@ -354,16 +304,16 @@ export default function CashFlowPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
+                    Type
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Amount
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Description
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
+                    Date
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -372,65 +322,53 @@ export default function CashFlowPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {currentTransactions.length > 0 ? (
-                  currentTransactions.map(transaction => {
-                    const typeInfo = getTransactionTypeInfo(transaction.type);
-                    const isSystemTransaction = transaction.type === 'loan_disbursement' || transaction.type === 'loan_repayment';
-                    
-                    return (
-                      <tr key={transaction.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {formatDate(transaction.date)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {transaction.description}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeInfo.className}`}
-                          >
-                            {typeInfo.icon}
-                            {typeInfo.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={
-                              transaction.type === 'income' || transaction.type === 'loan_repayment' 
-                                ? 'text-green-600' 
-                                : 'text-red-600'
-                            }
-                          >
-                            {formatCurrency(transaction.amount)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex space-x-2">
-                            {isSystemTransaction ? (
-                              <span className="text-gray-400 flex items-center" title="System-generated transaction">
-                                <Lock className="h-5 w-5" />
-                              </span>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => openEditModal(transaction)}
-                                  className="p-1 text-blue-600 hover:text-blue-800"
-                                >
-                                  <Edit2 className="h-5 w-5" />
-                                </button>
-                                
-                                <button
-                                  onClick={() => handleDeleteTransaction(transaction.id)}
-                                  className="p-1 text-red-600 hover:text-red-800"
-                                >
-                                  <Trash2 className="h-5 w-5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
+                  currentTransactions.map(transaction => (
+                    <tr key={transaction.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          transaction.type === 'income' || transaction.type === 'loan_repayment'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {transaction.type.replace('_', ' ').charAt(0).toUpperCase() + 
+                           transaction.type.replace('_', ' ').slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {formatCurrency(transaction.amount)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm truncate max-w-xs">{transaction.description}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {formatDate(transaction.date)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex space-x-2">
+                          {!['loan_disbursement', 'loan_repayment'].includes(transaction.type) && (
+                            <>
+                              <button
+                                onClick={() => openEditModal(transaction)}
+                                className="p-1 text-blue-600 hover:text-blue-800"
+                              >
+                                <Edit className="h-5 w-5" />
+                              </button>
+                              
+                              <button
+                                onClick={() => handleDeleteTransaction(transaction.id)}
+                                className="p-1 text-red-600 hover:text-red-800"
+                              >
+                                <Trash2 className="h-5 w-5" />
+                              </button>
+                            </>
+                          )}
+                          {['loan_disbursement', 'loan_repayment'].includes(transaction.type) && (
+                            <span className="text-xs text-gray-500 italic">System generated</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 ) : (
                   <tr>
                     <td
@@ -506,9 +444,6 @@ export default function CashFlowPage() {
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
               </select>
-              <p className="mt-1 text-xs text-gray-500">
-                Note: Loan disbursements and repayments are automatically recorded when loans are approved or repayments are made.
-              </p>
             </div>
             
             <div>
@@ -537,10 +472,10 @@ export default function CashFlowPage() {
                 value={formData.description}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                rows={3}
                 required
+                rows={3}
                 disabled={isSubmitting}
-              />
+              ></textarea>
             </div>
             
             <div>
@@ -615,11 +550,22 @@ export default function CashFlowPage() {
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
                 required
-                disabled={isSubmitting}
+                disabled={isSubmitting || ['loan_disbursement', 'loan_repayment'].includes(formData.type)}
               >
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
+                {['loan_disbursement', 'loan_repayment'].includes(formData.type) && (
+                  <option value={formData.type}>
+                    {formData.type.replace('_', ' ').charAt(0).toUpperCase() + 
+                     formData.type.replace('_', ' ').slice(1)}
+                  </option>
+                )}
               </select>
+              {['loan_disbursement', 'loan_repayment'].includes(formData.type) && (
+                <p className="text-xs text-gray-500 mt-1">
+                  System-generated transaction type cannot be changed
+                </p>
+              )}
             </div>
             
             <div>
@@ -648,10 +594,10 @@ export default function CashFlowPage() {
                 value={formData.description}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                rows={3}
                 required
+                rows={3}
                 disabled={isSubmitting}
-              />
+              ></textarea>
             </div>
             
             <div>
