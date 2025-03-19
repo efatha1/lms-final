@@ -7,6 +7,10 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+// Determine if we're in production mode
+const isProduction = process.env.NODE_ENV === 'production';
+console.log(`Running in ${isProduction ? 'production' : 'development'} mode`);
+
 // Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -49,13 +53,17 @@ app.use(cors()); // Enable CORS for development (adjust for production if needed
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir));
 
-// Determine if we're in production mode
-const isProduction = process.env.NODE_ENV === 'production';
-
 // Serve frontend static files from Vite's build output in production
 if (isProduction) {
   const clientBuildPath = path.join(__dirname, '../dist');
-  app.use(express.static(clientBuildPath));
+  console.log(`Serving static files from: ${clientBuildPath}`);
+  
+  // Check if the build directory exists
+  if (!fs.existsSync(clientBuildPath)) {
+    console.warn(`Warning: Build directory (${clientBuildPath}) does not exist. Frontend will not be served.`);
+  } else {
+    app.use(express.static(clientBuildPath));
+  }
 }
 
 // Database connection
@@ -228,6 +236,11 @@ const logAudit = async (userId, action, details) => {
     console.error('Error logging audit:', error);
   }
 };
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Server is running' });
+});
 
 // Routes
 app.post('/api/auth/register', async (req, res) => {
@@ -766,15 +779,16 @@ app.get('/api/reports/loan-repayments', authenticateToken, async (req, res) => {
   }
 });
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running' });
-});
-
-// Handle React Router (client-side routing)
-// This should be the last route handler
+// Handle React Router (client-side routing) in production
 if (isProduction) {
+  // This should be the last route handler
   app.get('*', (req, res) => {
+    // Check if the request is for an API endpoint
+    if (req.url.startsWith('/api/')) {
+      return res.status(404).json({ message: 'API endpoint not found' });
+    }
+    
+    // Otherwise, serve the index.html for client-side routing
     res.sendFile(path.join(__dirname, '../dist/index.html'));
   });
 }

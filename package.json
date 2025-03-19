@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "install:all": "npm install && cd server && npm install",
-    "dev": "node dev-server.js",
+    "dev": "node dev-server.mjs",
     "build": "tsc -b && vite build",
-    "start": "npm run build && cd server && node index.js",
+    "start": "cross-env NODE_ENV=production npm run build && cd server && node index.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "build:sourcemap": "tsc -b && vite build --sourcemap"
@@ -70,6 +70,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.16",
