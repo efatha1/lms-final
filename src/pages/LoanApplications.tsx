@@ -62,6 +62,12 @@ export default function LoanApplications() {
     sponsor1_doc: null as File | null,
     sponsor2_doc: null as File | null,
     terms_doc: null as File | null,
+    local_govt_letter: null as File | null,
+    csee_certificate: null as File | null,
+    acse_certificate: null as File | null,
+    title_deed: null as File | null,
+    vehicle_reg_card: null as File | null,
+    insurance_card: null as File | null,
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -123,41 +129,115 @@ export default function LoanApplications() {
     
     // Fetch documents (mock for now)
     // In a real implementation, you would fetch the documents from the server
-    setDocuments({
-      employment_proof: {
+    const documentMap: Record<string, Document> = {};
+    
+    // Required documents
+    if (application.employment_status === 'Employed' && application.employment_proof) {
+      documentMap.employment_proof = {
         id: application.employment_proof,
         filename: 'employment_proof.pdf',
         path: '/uploads/employment_proof.pdf',
         uploaded_at: application.created_at,
         related_table: 'loan_applications',
         related_id: application.id,
-      },
-      sponsor1_doc: {
-        id: application.sponsor1_doc,
-        filename: 'sponsor1_doc.pdf',
-        path: '/uploads/sponsor1_doc.pdf',
-        uploaded_at: application.created_at,
-        related_table: 'loan_applications',
-        related_id: application.id,
-      },
-      sponsor2_doc: {
-        id: application.sponsor2_doc,
-        filename: 'sponsor2_doc.pdf',
-        path: '/uploads/sponsor2_doc.pdf',
-        uploaded_at: application.created_at,
-        related_table: 'loan_applications',
-        related_id: application.id,
-      },
-      terms_doc: {
-        id: application.terms_doc,
-        filename: 'terms_doc.pdf',
-        path: '/uploads/terms_doc.pdf',
-        uploaded_at: application.created_at,
-        related_table: 'loan_applications',
-        related_id: application.id,
-      },
-    });
+      };
+    }
     
+    documentMap.sponsor1_doc = {
+      id: application.sponsor1_doc,
+      filename: 'sponsor1_doc.pdf',
+      path: '/uploads/sponsor1_doc.pdf',
+      uploaded_at: application.created_at,
+      related_table: 'loan_applications',
+      related_id: application.id,
+    };
+    
+    documentMap.sponsor2_doc = {
+      id: application.sponsor2_doc,
+      filename: 'sponsor2_doc.pdf',
+      path: '/uploads/sponsor2_doc.pdf',
+      uploaded_at: application.created_at,
+      related_table: 'loan_applications',
+      related_id: application.id,
+    };
+    
+    documentMap.terms_doc = {
+      id: application.terms_doc,
+      filename: 'terms_doc.pdf',
+      path: '/uploads/terms_doc.pdf',
+      uploaded_at: application.created_at,
+      related_table: 'loan_applications',
+      related_id: application.id,
+    };
+    
+    // Optional documents
+    if (application.local_govt_letter) {
+      documentMap.local_govt_letter = {
+        id: application.local_govt_letter,
+        filename: 'local_govt_letter.pdf',
+        path: '/uploads/local_govt_letter.pdf',
+        uploaded_at: application.created_at,
+        related_table: 'loan_applications',
+        related_id: application.id,
+      };
+    }
+    
+    if (application.csee_certificate) {
+      documentMap.csee_certificate = {
+        id: application.csee_certificate,
+        filename: 'csee_certificate.pdf',
+        path: '/uploads/csee_certificate.pdf',
+        uploaded_at: application.created_at,
+        related_table: 'loan_applications',
+        related_id: application.id,
+      };
+    }
+    
+    if (application.acse_certificate) {
+      documentMap.acse_certificate = {
+        id: application.acse_certificate,
+        filename: 'acse_certificate.pdf',
+        path: '/uploads/acse_certificate.pdf',
+        uploaded_at: application.created_at,
+        related_table: 'loan_applications',
+        related_id: application.id,
+      };
+    }
+    
+    if (application.title_deed) {
+      documentMap.title_deed = {
+        id: application.title_deed,
+        filename: 'title_deed.pdf',
+        path: '/uploads/title_deed.pdf',
+        uploaded_at: application.created_at,
+        related_table: 'loan_applications',
+        related_id: application.id,
+      };
+    }
+    
+    if (application.vehicle_reg_card) {
+      documentMap.vehicle_reg_card = {
+        id: application.vehicle_reg_card,
+        filename: 'vehicle_reg_card.pdf',
+        path: '/uploads/vehicle_reg_card.pdf',
+        uploaded_at: application.created_at,
+        related_table: 'loan_applications',
+        related_id: application.id,
+      };
+    }
+    
+    if (application.insurance_card) {
+      documentMap.insurance_card = {
+        id: application.insurance_card,
+        filename: 'insurance_card.pdf',
+        path: '/uploads/insurance_card.pdf',
+        uploaded_at: application.created_at,
+        related_table: 'loan_applications',
+        related_id: application.id,
+      };
+    }
+    
+    setDocuments(documentMap);
     setIsViewModalOpen(true);
   };
 
@@ -222,10 +302,16 @@ export default function LoanApplications() {
       return;
     }
     
-    // Validate files
-    if (!formFiles.employment_proof || !formFiles.sponsor1_doc || 
-        !formFiles.sponsor2_doc || !formFiles.terms_doc) {
+    // Validate required files
+    if (!formFiles.sponsor1_doc || !formFiles.sponsor2_doc || !formFiles.terms_doc) {
       showToast('error', 'Validation Error', 'Please upload all required documents');
+      setIsSubmitting(false);
+      return;
+    }
+    
+    // Validate employment proof only if employment status is Employed
+    if (formData.employment_status === 'Employed' && !formFiles.employment_proof) {
+      showToast('error', 'Validation Error', 'Please upload employment proof document');
       setIsSubmitting(false);
       return;
     }
@@ -236,11 +322,48 @@ export default function LoanApplications() {
       formDataObj.append(key, value.toString());
     });
     
-    Object.entries(formFiles).forEach(([key, file]) => {
-      if (file) {
-        formDataObj.append(key, file);
-      }
-    });
+    // Add required files
+    if (formFiles.sponsor1_doc) {
+      formDataObj.append('sponsor1_doc', formFiles.sponsor1_doc);
+    }
+    
+    if (formFiles.sponsor2_doc) {
+      formDataObj.append('sponsor2_doc', formFiles.sponsor2_doc);
+    }
+    
+    if (formFiles.terms_doc) {
+      formDataObj.append('terms_doc', formFiles.terms_doc);
+    }
+    
+    // Add employment proof only if employment status is Employed
+    if (formData.employment_status === 'Employed' && formFiles.employment_proof) {
+      formDataObj.append('employment_proof', formFiles.employment_proof);
+    }
+    
+    // Add optional files if they exist
+    if (formFiles.local_govt_letter) {
+      formDataObj.append('local_govt_letter', formFiles.local_govt_letter);
+    }
+    
+    if (formFiles.csee_certificate) {
+      formDataObj.append('csee_certificate', formFiles.csee_certificate);
+    }
+    
+    if (formFiles.acse_certificate) {
+      formDataObj.append('acse_certificate', formFiles.acse_certificate);
+    }
+    
+    if (formFiles.title_deed) {
+      formDataObj.append('title_deed', formFiles.title_deed);
+    }
+    
+    if (formFiles.vehicle_reg_card) {
+      formDataObj.append('vehicle_reg_card', formFiles.vehicle_reg_card);
+    }
+    
+    if (formFiles.insurance_card) {
+      formDataObj.append('insurance_card', formFiles.insurance_card);
+    }
     
     try {
       const newApplication = await createLoanApplication(token, formDataObj);
@@ -280,6 +403,12 @@ export default function LoanApplications() {
       sponsor1_doc: null,
       sponsor2_doc: null,
       terms_doc: null,
+      local_govt_letter: null,
+      csee_certificate: null,
+      acse_certificate: null,
+      title_deed: null,
+      vehicle_reg_card: null,
+      insurance_card: null,
     });
   };
 
@@ -661,30 +790,33 @@ export default function LoanApplications() {
           </div>
           
           <div className="mb-4">
-            <h4 className="text-md font-medium text-gray-700 mb-2">Documents</h4>
+            <h4 className="text-md font-medium text-gray-700 mb-2">Required Documents</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Employment Proof *
-                </label>
-                <div className="flex items-center">
-                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
-                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
-                    <span className="text-sm text-gray-600">
-                      {formFiles.employment_proof ? formFiles.employment_proof.name : 'Upload File'}
-                    </span>
-                    <input
-                      type="file"
-                      name="employment_proof"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      required
-                      disabled={isSubmitting}
-                    />
+              {/* Employment Proof - Only show if employment status is Employed */}
+              {formData.employment_status === 'Employed' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Employment Proof *
                   </label>
+                  <div className="flex items-center">
+                    <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                      <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                      <span className="text-sm text-gray-600">
+                        {formFiles.employment_proof ? formFiles.employment_proof.name : 'Upload File'}
+                      </span>
+                      <input
+                        type="file"
+                        name="employment_proof"
+                        onChange={handleFileChange}
+                        className="hidden"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        required={formData.employment_status === 'Employed'}
+                        disabled={isSubmitting}
+                      />
+                    </label>
+                  </div>
                 </div>
-              </div>
+              )}
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -749,6 +881,143 @@ export default function LoanApplications() {
                       className="hidden"
                       accept=".pdf,.jpg,.jpeg,.png"
                       required
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mb-4">
+            <h4 className="text-md font-medium text-gray-700 mb-2">Additional Documents (Optional)</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Local Government Letter
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.local_govt_letter ? formFiles.local_govt_letter.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="local_govt_letter"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  CSEE Certificate
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.csee_certificate ? formFiles.csee_certificate.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="csee_certificate"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ACSE Certificate
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.acse_certificate ? formFiles.acse_certificate.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="acse_certificate"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Title Deed
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.title_deed ? formFiles.title_deed.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="title_deed"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Vehicle Registration Card
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.vehicle_reg_card ? formFiles.vehicle_reg_card.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="vehicle_reg_card"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Insurance Card
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.insurance_card ? formFiles.insurance_card.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="insurance_card"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
                       disabled={isSubmitting}
                     />
                   </label>
@@ -936,22 +1205,77 @@ export default function LoanApplications() {
           <div className="mb-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">Documents</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <DocumentViewer 
-                url={documents.employment_proof?.path || ''} 
-                filename="Employment Proof" 
-              />
-              <DocumentViewer 
-                url={documents.sponsor1_doc?.path || ''} 
-                filename="Sponsor 1 Document" 
-              />
-              <DocumentViewer 
-                url={documents.sponsor2_doc?.path || ''} 
-                filename="Sponsor 2 Document" 
-              />
-              <DocumentViewer 
-                url={documents.terms_doc?.path || ''} 
-                filename="Terms Document" 
-              />
+              {/* Required Documents */}
+              {selectedApplication.employment_status === 'Employed' && documents.employment_proof && (
+                <DocumentViewer 
+                  url={documents.employment_proof?.path || ''} 
+                  filename="Employment Proof" 
+                />
+              )}
+              
+              {documents.sponsor1_doc && (
+                <DocumentViewer 
+                  url={documents.sponsor1_doc?.path || ''} 
+                  filename="Sponsor 1 Document" 
+                />
+              )}
+              
+              {documents.sponsor2_doc && (
+                <DocumentViewer 
+                  url={documents.sponsor2_doc?.path || ''} 
+                  filename="Sponsor 2 Document" 
+                />
+              )}
+              
+              {documents.terms_doc && (
+                <DocumentViewer 
+                  url={documents.terms_doc?.path || ''} 
+                  filename="Terms Document" 
+                />
+              )}
+              
+              {/* Optional Documents */}
+              {documents.local_govt_letter && (
+                <DocumentViewer 
+                  url={documents.local_govt_letter?.path || ''} 
+                  filename="Local Government Letter" 
+                />
+              )}
+              
+              {documents.csee_certificate && (
+                <DocumentViewer 
+                  url={documents.csee_certificate?.path || ''} 
+                  filename="CSEE Certificate" 
+                />
+              )}
+              
+              {documents.acse_certificate && (
+                <DocumentViewer 
+                  url={documents.acse_certificate?.path || ''} 
+                  filename="ACSE Certificate" 
+                />
+              )}
+              
+              {documents.title_deed && (
+                <DocumentViewer 
+                  url={documents.title_deed?.path || ''} 
+                  filename="Title Deed" 
+                />
+              )}
+              
+              {documents.vehicle_reg_card && (
+                <DocumentViewer 
+                  url={documents.vehicle_reg_card?.path || ''} 
+                  filename="Vehicle Registration Card" 
+                />
+              )}
+              
+              {documents.insurance_card && (
+                <DocumentViewer 
+                  url={documents.insurance_card?.path || ''} 
+                  filename="Insurance Card" 
+                />
+              )}
             </div>
           </div>
           

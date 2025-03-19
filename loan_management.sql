@@ -39,13 +39,25 @@ CREATE TABLE IF NOT EXISTS loan_applications (
   sponsor2_id VARCHAR(50) NOT NULL,
   sponsor2_doc INT,
   terms_doc INT,
+  local_govt_letter INT,
+  csee_certificate INT,
+  acse_certificate INT,
+  title_deed INT,
+  vehicle_reg_card INT,
+  insurance_card INT,
   status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (employment_proof) REFERENCES documents(id),
   FOREIGN KEY (sponsor1_doc) REFERENCES documents(id),
   FOREIGN KEY (sponsor2_doc) REFERENCES documents(id),
-  FOREIGN KEY (terms_doc) REFERENCES documents(id)
+  FOREIGN KEY (terms_doc) REFERENCES documents(id),
+  FOREIGN KEY (local_govt_letter) REFERENCES documents(id),
+  FOREIGN KEY (csee_certificate) REFERENCES documents(id),
+  FOREIGN KEY (acse_certificate) REFERENCES documents(id),
+  FOREIGN KEY (title_deed) REFERENCES documents(id),
+  FOREIGN KEY (vehicle_reg_card) REFERENCES documents(id),
+  FOREIGN KEY (insurance_card) REFERENCES documents(id)
 );
 
 -- Loan repayments table
