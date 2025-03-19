@@ -19,7 +19,8 @@ import {
   ChevronRight,
   ArrowUpRight,
   ArrowDownLeft,
-  Lock
+  Lock,
+  Info
 } from 'lucide-react';
 
 export default function CashFlowPage() {
@@ -59,6 +60,15 @@ export default function CashFlowPage() {
     .reduce((sum, t) => sum + t.amount, 0);
     
   const netCashFlow = totalIncome - totalExpenses;
+
+  // Calculate loan-related totals for display
+  const totalLoanRepayments = transactions
+    .filter(t => t.type === 'loan_repayment')
+    .reduce((sum, t) => sum + t.amount, 0);
+    
+  const totalLoanDisbursements = transactions
+    .filter(t => t.type === 'loan_disbursement')
+    .reduce((sum, t) => sum + t.amount, 0);
 
   useEffect(() => {
     const loadTransactions = async () => {
@@ -274,6 +284,16 @@ export default function CashFlowPage() {
 
   return (
     <PageContainer title="Cash Flow">
+      {/* Info Alert */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start">
+        <Info className="h-5 w-5 text-blue-500 mr-2 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="text-sm text-blue-700">
+            <strong>Note:</strong> Total income includes regular income and loan repayments. Total expenses include regular expenses and loan disbursements.
+          </p>
+        </div>
+      </div>
+      
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card>
@@ -284,6 +304,9 @@ export default function CashFlowPage() {
             <div>
               <p className="text-sm font-medium text-gray-500">Total Income</p>
               <h3 className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</h3>
+              <div className="text-xs text-gray-500 mt-1">
+                Includes {formatCurrency(totalLoanRepayments)} loan repayments
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -296,6 +319,9 @@ export default function CashFlowPage() {
             <div>
               <p className="text-sm font-medium text-gray-500">Total Expenses</p>
               <h3 className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</h3>
+              <div className="text-xs text-gray-500 mt-1">
+                Includes {formatCurrency(totalLoanDisbursements)} loan disbursements
+              </div>
             </div>
           </CardContent>
         </Card>

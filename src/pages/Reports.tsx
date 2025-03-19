@@ -60,6 +60,11 @@ export default function Reports() {
   // Colors for pie chart
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 
+  // Calculate totals
+  const totalIncome = cashFlowData.reduce((sum, item) => sum + item.income, 0);
+  const totalExpenses = cashFlowData.reduce((sum, item) => sum + item.expense, 0);
+  const netCashFlow = totalIncome - totalExpenses;
+
   if (isLoading) {
     return (
       <PageContainer title="Reports">
@@ -160,7 +165,7 @@ export default function Reports() {
             )}
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
             <div className="bg-gray-50 p-4 rounded-lg">
               <div className="flex items-center">
                 <div className="p-2 rounded-full bg-green-100 text-green-600 mr-3">
@@ -169,9 +174,7 @@ export default function Reports() {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Total Income</p>
                   <p className="text-xl font-bold text-gray-900">
-                    {formatCurrency(
-                      cashFlowData.reduce((sum, item) => sum + item.income, 0)
-                    )}
+                    {formatCurrency(totalIncome)}
                   </p>
                 </div>
               </div>
@@ -185,9 +188,22 @@ export default function Reports() {
                 <div>
                   <p className="text-sm font-medium text-gray-500">Total Expenses</p>
                   <p className="text-xl font-bold text-gray-900">
-                    {formatCurrency(
-                      cashFlowData.reduce((sum, item) => sum + item.expense, 0)
-                    )}
+                    {formatCurrency(totalExpenses)}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex items-center">
+                <div className={`p-2 rounded-full ${netCashFlow >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} mr-3`}>
+                  <DollarSign className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Net Cash Flow</p>
+                  <p className={`text-xl font-bold ${netCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(Math.abs(netCashFlow))}
+                    {netCashFlow < 0 && ' (Deficit)'}
                   </p>
                 </div>
               </div>
