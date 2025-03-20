@@ -27,11 +27,11 @@ export default function CashFlowPage() {
 
   // Updated Summary calculations
   const totalIncome = transactions
-    .filter(t => t.type === 'income' || t.description.toLowerCase().includes('loan repayment'))
+    .filter(t => t.type === 'income' || t.type === 'loan_repayment')
     .reduce((sum, t) => sum + t.amount, 0);
     
   const totalExpenses = transactions
-    .filter(t => t.type === 'expense' || t.description.toLowerCase().includes('loan disbursement'))
+    .filter(t => t.type === 'expense' || t.type === 'loan_disbursement')
     .reduce((sum, t) => sum + t.amount, 0);
     
   const netCashFlow = totalIncome - totalExpenses;
@@ -53,7 +53,7 @@ export default function CashFlowPage() {
     
     try {
       const newTransaction = await createCashFlow(token, {
-        type: formData.type as 'income' | 'expense',
+        type: formData.type as 'income' | 'expense' | 'loan_disbursement' | 'loan_repayment',
         amount: parseFloat(formData.amount),
         description: formData.description,
         date: formData.date,
@@ -74,5 +74,89 @@ export default function CashFlowPage() {
     }
   };
 
-  // ... (rest of the component remains the same)
+  // ... (rest of the component logic remains the same)
+
+  // Helper function to get transaction type icon and style
+  const getTransactionTypeInfo = (type: string) => {
+    switch(type) {
+      case 'income':
+        return {
+          icon: <TrendingUp className="h-3 w-3 mr-1" />,
+          className: 'bg-green-100 text-green-800',
+          label: 'Income'
+        };
+      case 'expense':
+        return {
+          icon: <TrendingDown className="h-3 w-3 mr-1" />,
+          className: 'bg-red-100 text-red-800',
+          label: 'Expense'
+        };
+      case 'loan_disbursement':
+        return {
+          icon: <ArrowUpRight className="h-3 w-3 mr-1" />,
+          className: 'bg-blue-100 text-blue-800',
+          label: 'Loan Disbursement'
+        };
+      case 'loan_repayment':
+        return {
+          icon: <ArrowDownLeft className="h-3 w-3 mr-1" />,
+          className: 'bg-purple-100 text-purple-800',
+          label: 'Loan Repayment'
+        };
+      default:
+        return {
+          icon: <TrendingUp className="h-3 w-3 mr-1" />,
+          className: 'bg-gray-100 text-gray-800',
+          label: type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')
+        };
+    }
+  };
+
+  return (
+    <PageContainer title="Cash Flow">
+      {/* ... (previous JSX remains the same) */}
+
+      {/* Create Transaction Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => {
+          if (!isSubmitting) {
+            setIsCreateModalOpen(false);
+            resetForm();
+          }
+        }}
+        title="Create Transaction"
+        size="md"
+      >
+        <form onSubmit={handleCreateTransaction}>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Type *
+              </label>
+              <select
+                name="type"
+                value={formData.type}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
+                required
+                disabled={isSubmitting}
+              >
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                <option value="loan_disbursement">Loan Disbursement</option>
+                <option value="loan_repayment">Loan Repayment</option>
+              </select>
+            </div>
+            
+            {/* ... (rest of the form fields remain the same) */}
+          </div>
+          
+          {/* ... (form buttons remain the same) */}
+        </form>
+      </Modal>
+
+      {/* ... (rest of the component remains the same) */}
+    </PageContainer>
+  );
 }

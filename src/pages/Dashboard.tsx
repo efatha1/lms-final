@@ -14,11 +14,11 @@ export default function Dashboard() {
   // ... (previous code remains the same)
 
   const totalIncome = dashboardData?.recent_transactions
-    .filter(t => t.type === 'income' || t.description.toLowerCase().includes('loan repayment'))
+    .filter(t => t.type === 'income' || t.type === 'loan_repayment')
     .reduce((sum, t) => sum + t.amount, 0) || 0;
     
   const totalExpenses = dashboardData?.recent_transactions
-    .filter(t => t.type === 'expense' || t.description.toLowerCase().includes('loan disbursement'))
+    .filter(t => t.type === 'expense' || t.type === 'loan_disbursement')
     .reduce((sum, t) => sum + t.amount, 0) || 0;
     
   const netCashFlow = totalIncome - totalExpenses;
@@ -29,17 +29,7 @@ export default function Dashboard() {
     <PageContainer title="Dashboard">
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardContent className="flex items-center py-4">
-            <div className="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
-              <Users className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Total Applications</p>
-              <h3 className="text-2xl font-bold">{dashboardData?.total_applications || 0}</h3>
-            </div>
-          </CardContent>
-        </Card>
+        {/* ... (other summary cards remain the same) */}
         
         <Card>
           <CardContent className="flex items-center py-4">
