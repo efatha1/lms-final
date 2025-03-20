@@ -3,20 +3,25 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { fetchRepayments, markRepaymentAsPaid } from '../api/repayments';
 import { PageContainer } from '../components/layout/PageContainer';
-import { Card } from '../components/ui/card';
-import { StatusBadge } from '../components/ui/status-badge';
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { LoanRepayment } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
-import { Search, CheckCircle, AlertCircle, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { 
+  CheckCircle, 
+  XCircle, 
+  AlertTriangle,
+  Clock,
+  Search,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
 
-export default function Repayments() {
+export default function RepaymentsPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
   const [repayments, setRepayments] = useState<LoanRepayment[]>([]);
-  const [filteredRepayments, setFilteredRepayments] = useState<LoanRepayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isProcessing, setIsProcessing] = useState<number | null>(null);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,7 +34,6 @@ export default function Repayments() {
       try {
         const data = await fetchRepayments(token);
         setRepayments(data);
-        setFilteredRepayments(data);
       } catch (error) {
         showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to load repayments');
       } finally {
@@ -40,22 +44,28 @@ export default function Repayments() {
     loadRepayments();
   }, [token, showToast]);
 
-  // Filter repayments based on search query
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredRepayments(repayments);
-    } else {
-      const lowercaseQuery = searchQuery.toLowerCase();
-      const filtered = repayments.filter(
-        repayment => 
-          (repayment.applicant_name?.toLowerCase() || '').includes(lowercaseQuery) ||
-          (repayment.nida_id?.toLowerCase() || '').includes(lowercaseQuery) ||
-          repayment.amount.toString().includes(lowercaseQuery)
-      );
-      setFilteredRepayments(filtered);
-    }
-    setCurrentPage(1); // Reset to first page when filtering
-  }, [searchQuery, repayments]);
+  // Calculate summary values
+  const totalDue = repayments.reduce((sum, repayment) => sum + repayment.total_loan - repayment.amount_paid, 0);
+  const overdue = repayments.filter(repayment => !repayment.paid && new Date(repayment.due_date) < new Date()).length;
+  const dueSoon = repayments.filter(repayment => {
+    const dueDate = new Date(repayment.due_date);
+    const oneMonthFromNow = new Date();
+    oneMonthFromNow.setMonth(oneMonthFromNow.getMonth() + 1);
+    return !repayment.paid && dueDate <= oneMonthFromNow && dueDate >= new Date();
+  }).reduce((sum, repayment) => sum + repayment.amount, 0);
+
+  // Filter and sort repayments
+  const filteredRepayments = repayments
+    .filter(repayment => 
+      repayment.applicant_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      repayment.nida_id.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    .sort((a, b) => {
+      if (a.paid === b.paid) {
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+      }
+      return a.paid ? 1 : -1;
+    });
 
   // Get current repayments for pagination
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -66,62 +76,19 @@ export default function Repayments() {
   const handleMarkAsPaid = async (id: number) => {
     if (!token) return;
     
-    setIsProcessing(id);
-    
     try {
-      const updatedRepayment = await markRepaymentAsPaid(token, id);
+      await markRepaymentAsPaid(token, id);
       
       // Update local state
       setRepayments(repayments.map(repayment => 
-        repayment.id === id ? updatedRepayment : repayment
+        repayment.id === id ? { ...repayment, paid: true, paid_date: new Date().toISOString() } : repayment
       ));
       
-      showToast('success', 'Payment Recorded', 'Repayment marked as paid successfully');
+      showToast('success', 'Repayment Marked as Paid', 'Repayment has been successfully marked as paid');
     } catch (error) {
       showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to mark repayment as paid');
-    } finally {
-      setIsProcessing(null);
     }
   };
-
-  const getRepaymentStatus = (repayment: LoanRepayment): 'paid' | 'overdue' | 'due-soon' => {
-    if (repayment.paid) return 'paid';
-    
-    const dueDate = new Date(repayment.due_date);
-    const today = new Date();
-    
-    // If due date is in the past, it's overdue
-    if (dueDate < today) return 'overdue';
-    
-    // If due date is within the next 7 days, it's due soon
-    const sevenDaysFromNow = new Date();
-    sevenDaysFromNow.setDate(today.getDate() + 7);
-    
-    if (dueDate <= sevenDaysFromNow) return 'due-soon';
-    
-    // Default to due-soon for unpaid repayments
-    return 'due-soon';
-  };
-
-  // Calculate summary stats
-  const totalDue = repayments
-    .filter(r => !r.paid)
-    .reduce((sum, r) => sum + r.amount, 0);
-    
-  const overdue = repayments
-    .filter(r => !r.paid && new Date(r.due_date) < new Date())
-    .reduce((sum, r) => sum + r.amount, 0);
-    
-  const dueSoon = repayments
-    .filter(r => {
-      if (r.paid) return false;
-      const dueDate = new Date(r.due_date);
-      const today = new Date();
-      const sevenDaysFromNow = new Date();
-      sevenDaysFromNow.setDate(today.getDate() + 7);
-      return dueDate >= today && dueDate <= sevenDaysFromNow;
-    })
-    .reduce((sum, r) => sum + r.amount, 0);
 
   if (isLoading) {
     return (
@@ -138,47 +105,47 @@ export default function Repayments() {
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card>
-          <div className="p-6 flex items-center">
+          <CardContent className="flex items-center py-4">
             <div className="p-3 rounded-full bg-blue-100 text-blue-600 mr-4">
-              <Clock className="h-6 w-6" />
+              <AlertTriangle className="h-6 w-6" />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">Total Due</p>
-              <h3 className="text-2xl font-bold text-gray-900">{formatCurrency(totalDue)}</h3>
+              <h3 className="text-2xl font-bold">{formatCurrency(totalDue)}</h3>
             </div>
-          </div>
+          </CardContent>
         </Card>
         
         <Card>
-          <div className="p-6 flex items-center">
+          <CardContent className="flex items-center py-4">
             <div className="p-3 rounded-full bg-red-100 text-red-600 mr-4">
-              <AlertCircle className="h-6 w-6" />
+              <XCircle className="h-6 w-6" />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">Overdue</p>
-              <h3 className="text-2xl font-bold text-red-600">{formatCurrency(overdue)}</h3>
+              <h3 className="text-2xl font-bold">{overdue}</h3>
             </div>
-          </div>
+          </CardContent>
         </Card>
         
         <Card>
-          <div className="p-6 flex items-center">
+          <CardContent className="flex items-center py-4">
             <div className="p-3 rounded-full bg-yellow-100 text-yellow-600 mr-4">
               <Clock className="h-6 w-6" />
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">Due Soon</p>
-              <h3 className="text-2xl font-bold text-yellow-600">{formatCurrency(dueSoon)}</h3>
+              <h3 className="text-2xl font-bold">{formatCurrency(dueSoon)}</h3>
             </div>
-          </div>
+          </CardContent>
         </Card>
       </div>
       
       {/* Repayments Table */}
       <Card className="mb-6">
         <div className="p-6">
-          <div className="flex flex-col md:flex-row justify-between mb-4">
-            <div className="relative mb-4 md:mb-0 md:w-64">
+          <div className="flex justify-between mb-4">
+            <div className="relative w-64">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-5 w-5 text-gray-400" />
               </div>
@@ -206,12 +173,6 @@ export default function Repayments() {
                     Amount
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Loan
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount Paid
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -220,58 +181,45 @@ export default function Repayments() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {currentRepayments.length > 0 ? (
-                  currentRepayments.map(repayment => (
-                    <tr key={repayment.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-medium">{repayment.applicant_name}</div>
-                        <div className="text-sm text-gray-500">{repayment.nida_id}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {formatDate(repayment.due_date)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {formatCurrency(repayment.amount)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {formatCurrency(repayment.total_loan || 0)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {formatCurrency(repayment.amount_paid || 0)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <StatusBadge status={getRepaymentStatus(repayment)} />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                {currentRepayments.map((repayment) => (
+                  <tr key={repayment.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{repayment.applicant_name}</div>
+                      <div className="text-sm text-gray-500">{repayment.nida_id}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {formatDate(repayment.due_date)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {formatCurrency(repayment.amount)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {repayment.paid ? (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          Paid
+                        </span>
+                      ) : new Date(repayment.due_date) < new Date() ? (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                          Overdue
+                        </span>
+                      ) : (
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {!repayment.paid && (
                         <button
                           onClick={() => handleMarkAsPaid(repayment.id)}
-                          disabled={repayment.paid || isProcessing === repayment.id}
-                          className={`px-3 py-1 rounded-md text-sm font-medium flex items-center ${
-                            repayment.paid || isProcessing === repayment.id
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-green-100 text-green-700 hover:bg-green-200'
-                          }`}
+                          className="text-green-600 hover:text-green-900"
                         >
-                          {isProcessing === repayment.id ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-700 mr-2"></div>
-                          ) : (
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                          )}
-                          {repayment.paid ? 'Paid' : 'Mark as Paid'}
+                          <CheckCircle className="h-5 w-5" />
                         </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-6 py-4 text-center text-sm text-gray-500"
-                    >
-                      No repayments found
+                      )}
                     </td>
                   </tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>
