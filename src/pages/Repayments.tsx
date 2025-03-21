@@ -40,20 +40,42 @@ export default function Repayments() {
     loadRepayments();
   }, [token, showToast]);
 
-  // Filter repayments based on search query
+  // Filter and sort repayments based on search query and paid status
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredRepayments(repayments);
-    } else {
+    let filtered = [...repayments];
+    
+    // Apply search filter if query exists
+    if (searchQuery.trim()) {
       const lowercaseQuery = searchQuery.toLowerCase();
-      const filtered = repayments.filter(
+      filtered = filtered.filter(
         repayment => 
           (repayment.applicant_name?.toLowerCase() || '').includes(lowercaseQuery) ||
           (repayment.nida_id?.toLowerCase() || '').includes(lowercaseQuery) ||
           repayment.amount.toString().includes(lowercaseQuery)
       );
-      setFilteredRepayments(filtered);
     }
+    
+    // Sort repayments: unpaid first (sorted by due date), then paid
+    filtered.sort((a, b) => {
+      // First sort by paid status (unpaid first)
+      if (a.paid !== b.paid) {
+        return a.paid ? 1 : -1;
+      }
+      
+      // For unpaid repayments, sort by due date (ascending)
+      if (!a.paid) {
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+      }
+      
+      // For paid repayments, sort by paid date (descending)
+      if (a.paid_date && b.paid_date) {
+        return new Date(b.paid_date).getTime() - new Date(a.paid_date).getTime();
+      }
+      
+      return 0;
+    });
+    
+    setFilteredRepayments(filtered);
     setCurrentPage(1); // Reset to first page when filtering
   }, [searchQuery, repayments]);
 
@@ -222,13 +244,18 @@ export default function Repayments() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {currentRepayments.length > 0 ? (
                   currentRepayments.map(repayment => (
-                    <tr key={repayment.id} className="hover:bg-gray-50">
+                    <tr key={repayment.id} className={`hover:bg-gray-50 ${repayment.paid ? 'bg-gray-50' : ''}`}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="font-medium">{repayment.applicant_name}</div>
                         <div className="text-sm text-gray-500">{repayment.nida_id}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {formatDate(repayment.due_date)}
+                        {repayment.paid && repayment.paid_date && (
+                          <div className="text-sm text-gray-500">
+                            Paid on: {formatDate(repayment.paid_date)}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {formatCurrency(repayment.amount)}

@@ -18,7 +18,7 @@ export interface LoanApplication {
   term_months: number;
   interest_rate: number;
   employment_status: 'Employed' | 'Entrepreneur';
-  employment_proof: number; // document ID
+  employment_proof: number | null; // document ID
   mode_of_repayment: 'weekly' | 'monthly';
   sponsor1_name: string;
   sponsor1_id: string;
@@ -27,6 +27,12 @@ export interface LoanApplication {
   sponsor2_id: string;
   sponsor2_doc: number; // document ID
   terms_doc: number; // document ID
+  local_govt_letter?: number | null; // optional document ID
+  title_deed?: number | null; // optional document ID
+  vehicle_reg_card?: number | null; // optional document ID
+  csee_certificate?: number | null; // optional document ID
+  acse_certificate?: number | null; // optional document ID
+  higher_edu_certificate?: number | null; // optional document ID
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
   updated_at: string;

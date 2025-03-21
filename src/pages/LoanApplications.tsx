@@ -62,6 +62,12 @@ export default function LoanApplications() {
     sponsor1_doc: null as File | null,
     sponsor2_doc: null as File | null,
     terms_doc: null as File | null,
+    local_govt_letter: null as File | null,
+    title_deed: null as File | null,
+    vehicle_reg_card: null as File | null,
+    csee_certificate: null as File | null,
+    acse_certificate: null as File | null,
+    higher_edu_certificate: null as File | null,
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -222,10 +228,16 @@ export default function LoanApplications() {
       return;
     }
     
-    // Validate files
-    if (!formFiles.employment_proof || !formFiles.sponsor1_doc || 
-        !formFiles.sponsor2_doc || !formFiles.terms_doc) {
+    // Validate required files
+    if (!formFiles.sponsor1_doc || !formFiles.sponsor2_doc || !formFiles.terms_doc) {
       showToast('error', 'Validation Error', 'Please upload all required documents');
+      setIsSubmitting(false);
+      return;
+    }
+    
+    // Validate employment proof if employed
+    if (formData.employment_status === 'Employed' && !formFiles.employment_proof) {
+      showToast('error', 'Validation Error', 'Please upload employment proof document');
       setIsSubmitting(false);
       return;
     }
@@ -236,11 +248,47 @@ export default function LoanApplications() {
       formDataObj.append(key, value.toString());
     });
     
-    Object.entries(formFiles).forEach(([key, file]) => {
-      if (file) {
-        formDataObj.append(key, file);
-      }
-    });
+    // Add required files
+    if (formData.employment_status === 'Employed' && formFiles.employment_proof) {
+      formDataObj.append('employment_proof', formFiles.employment_proof);
+    }
+    
+    if (formFiles.sponsor1_doc) {
+      formDataObj.append('sponsor1_doc', formFiles.sponsor1_doc);
+    }
+    
+    if (formFiles.sponsor2_doc) {
+      formDataObj.append('sponsor2_doc', formFiles.sponsor2_doc);
+    }
+    
+    if (formFiles.terms_doc) {
+      formDataObj.append('terms_doc', formFiles.terms_doc);
+    }
+    
+    // Add optional files if present
+    if (formFiles.local_govt_letter) {
+      formDataObj.append('local_govt_letter', formFiles.local_govt_letter);
+    }
+    
+    if (formFiles.title_deed) {
+      formDataObj.append('title_deed', formFiles.title_deed);
+    }
+    
+    if (formFiles.vehicle_reg_card) {
+      formDataObj.append('vehicle_reg_card', formFiles.vehicle_reg_card);
+    }
+    
+    if (formFiles.csee_certificate) {
+      formDataObj.append('csee_certificate', formFiles.csee_certificate);
+    }
+    
+    if (formFiles.acse_certificate) {
+      formDataObj.append('acse_certificate', formFiles.acse_certificate);
+    }
+    
+    if (formFiles.higher_edu_certificate) {
+      formDataObj.append('higher_edu_certificate', formFiles.higher_edu_certificate);
+    }
     
     try {
       const newApplication = await createLoanApplication(token, formDataObj);
@@ -280,6 +328,12 @@ export default function LoanApplications() {
       sponsor1_doc: null,
       sponsor2_doc: null,
       terms_doc: null,
+      local_govt_letter: null,
+      title_deed: null,
+      vehicle_reg_card: null,
+      csee_certificate: null,
+      acse_certificate: null,
+      higher_edu_certificate: null,
     });
   };
 
@@ -661,30 +715,32 @@ export default function LoanApplications() {
           </div>
           
           <div className="mb-4">
-            <h4 className="text-md font-medium text-gray-700 mb-2">Documents</h4>
+            <h4 className="text-md font-medium text-gray-700 mb-2">Required Documents</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Employment Proof *
-                </label>
-                <div className="flex items-center">
-                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
-                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
-                    <span className="text-sm text-gray-600">
-                      {formFiles.employment_proof ? formFiles.employment_proof.name : 'Upload File'}
-                    </span>
-                    <input
-                      type="file"
-                      name="employment_proof"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      required
-                      disabled={isSubmitting}
-                    />
+              {formData.employment_status === 'Employed' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Employment Proof *
                   </label>
+                  <div className="flex items-center">
+                    <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                      <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                      <span className="text-sm text-gray-600">
+                        {formFiles.employment_proof ? formFiles.employment_proof.name : 'Upload File'}
+                      </span>
+                      <input
+                        type="file"
+                        name="employment_proof"
+                        onChange={handleFileChange}
+                        className="hidden"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        required={formData.employment_status === 'Employed'}
+                        disabled={isSubmitting}
+                      />
+                    </label>
+                  </div>
                 </div>
-              </div>
+              )}
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -749,6 +805,143 @@ export default function LoanApplications() {
                       className="hidden"
                       accept=".pdf,.jpg,.jpeg,.png"
                       required
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mb-4">
+            <h4 className="text-md font-medium text-gray-700 mb-2">Optional Documents</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Local Government ID Letter
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.local_govt_letter ? formFiles.local_govt_letter.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="local_govt_letter"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Title Deed
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.title_deed ? formFiles.title_deed.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="title_deed"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Vehicle Registration Card
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.vehicle_reg_card ? formFiles.vehicle_reg_card.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="vehicle_reg_card"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  CSEE Certificate
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.csee_certificate ? formFiles.csee_certificate.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="csee_certificate"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  ACSE Certificate
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.acse_certificate ? formFiles.acse_certificate.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="acse_certificate"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      disabled={isSubmitting}
+                    />
+                  </label>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Higher Education Certificate
+                </label>
+                <div className="flex items-center">
+                  <label className="flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                    <Upload className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {formFiles.higher_edu_certificate ? formFiles.higher_edu_certificate.name : 'Upload File'}
+                    </span>
+                    <input
+                      type="file"
+                      name="higher_edu_certificate"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      accept=".pdf,.jpg,.jpeg,.png"
                       disabled={isSubmitting}
                     />
                   </label>

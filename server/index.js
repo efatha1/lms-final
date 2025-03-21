@@ -124,13 +124,25 @@ async function initializeDatabase() {
         sponsor2_id VARCHAR(50) NOT NULL,
         sponsor2_doc INT,
         terms_doc INT,
+        local_govt_letter INT,
+        title_deed INT,
+        vehicle_reg_card INT,
+        csee_certificate INT,
+        acse_certificate INT,
+        higher_edu_certificate INT,
         status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (employment_proof) REFERENCES documents(id) ON DELETE SET NULL,
         FOREIGN KEY (sponsor1_doc) REFERENCES documents(id) ON DELETE SET NULL,
         FOREIGN KEY (sponsor2_doc) REFERENCES documents(id) ON DELETE SET NULL,
-        FOREIGN KEY (terms_doc) REFERENCES documents(id) ON DELETE SET NULL
+        FOREIGN KEY (terms_doc) REFERENCES documents(id) ON DELETE SET NULL,
+        FOREIGN KEY (local_govt_letter) REFERENCES documents(id) ON DELETE SET NULL,
+        FOREIGN KEY (title_deed) REFERENCES documents(id) ON DELETE SET NULL,
+        FOREIGN KEY (vehicle_reg_card) REFERENCES documents(id) ON DELETE SET NULL,
+        FOREIGN KEY (csee_certificate) REFERENCES documents(id) ON DELETE SET NULL,
+        FOREIGN KEY (acse_certificate) REFERENCES documents(id) ON DELETE SET NULL,
+        FOREIGN KEY (higher_edu_certificate) REFERENCES documents(id) ON DELETE SET NULL
       )
     `);
     
@@ -310,7 +322,13 @@ app.post('/api/loan-applications', authenticateToken, upload.fields([
   { name: 'employment_proof', maxCount: 1 },
   { name: 'sponsor1_doc', maxCount: 1 },
   { name: 'sponsor2_doc', maxCount: 1 },
-  { name: 'terms_doc', maxCount: 1 }
+  { name: 'terms_doc', maxCount: 1 },
+  { name: 'local_govt_letter', maxCount: 1 },
+  { name: 'title_deed', maxCount: 1 },
+  { name: 'vehicle_reg_card', maxCount: 1 },
+  { name: 'csee_certificate', maxCount: 1 },
+  { name: 'acse_certificate', maxCount: 1 },
+  { name: 'higher_edu_certificate', maxCount: 1 }
 ]), async (req, res) => {
   const {
     applicant_name, nida_id, loan_amount, term_months, interest_rate,
@@ -320,9 +338,21 @@ app.post('/api/loan-applications', authenticateToken, upload.fields([
   
   const files = req.files;
   
-  if (!files || !files.employment_proof || !files.sponsor1_doc || 
-      !files.sponsor2_doc || !files.terms_doc) {
-    return res.status(400).json({ message: 'All required documents must be uploaded' });
+  // Validate required fields
+  if (!applicant_name || !nida_id || !loan_amount || !term_months || !interest_rate || 
+      !employment_status || !mode_of_repayment || !sponsor1_name || !sponsor1_id || 
+      !sponsor2_name || !sponsor2_id) {
+    return res.status(400).json({ message: 'All required fields must be provided' });
+  }
+  
+  // Validate required documents
+  if (!files || !files.sponsor1_doc || !files.sponsor2_doc || !files.terms_doc) {
+    return res.status(400).json({ message: 'Required documents must be uploaded' });
+  }
+  
+  // Validate employment proof if employed
+  if (employment_status === 'Employed' && !files.employment_proof) {
+    return res.status(400).json({ message: 'Employment proof document is required for employed applicants' });
   }
   
   const connection = await pool.getConnection();
@@ -330,50 +360,131 @@ app.post('/api/loan-applications', authenticateToken, upload.fields([
   try {
     await connection.beginTransaction();
     
-    const [employmentProofResult] = await connection.query(
-      'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
-      [files.employment_proof[0].originalname, `/uploads/${files.employment_proof[0].filename}`, 'loan_applications']
-    );
+    // Insert required documents
+    const documentInserts = [];
+    const documentFields = {};
     
+    // Process employment proof if employed
+    if (employment_status === 'Employed' && files.employment_proof) {
+      const [employmentProofResult] = await connection.query(
+        'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
+        [files.employment_proof[0].originalname, `/uploads/${files.employment_proof[0].filename}`, 'loan_applications']
+      );
+      documentFields.employment_proof = employmentProofResult.insertId;
+      documentInserts.push(employmentProofResult.insertId);
+    }
+    
+    // Process required documents
     const [sponsor1DocResult] = await connection.query(
       'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
       [files.sponsor1_doc[0].originalname, `/uploads/${files.sponsor1_doc[0].filename}`, 'loan_applications']
     );
+    documentFields.sponsor1_doc = sponsor1DocResult.insertId;
+    documentInserts.push(sponsor1DocResult.insertId);
     
     const [sponsor2DocResult] = await connection.query(
       'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
       [files.sponsor2_doc[0].originalname, `/uploads/${files.sponsor2_doc[0].filename}`, 'loan_applications']
     );
+    documentFields.sponsor2_doc = sponsor2DocResult.insertId;
+    documentInserts.push(sponsor2DocResult.insertId);
     
     const [termsDocResult] = await connection.query(
       'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
       [files.terms_doc[0].originalname, `/uploads/${files.terms_doc[0].filename}`, 'loan_applications']
     );
+    documentFields.terms_doc = termsDocResult.insertId;
+    documentInserts.push(termsDocResult.insertId);
     
+    // Process optional documents
+    if (files.local_govt_letter) {
+      const [result] = await connection.query(
+        'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
+        [files.local_govt_letter[0].originalname, `/uploads/${files.local_govt_letter[0].filename}`, 'loan_applications']
+      );
+      documentFields.local_govt_letter = result.insertId;
+      documentInserts.push(result.insertId);
+    }
+    
+    if (files.title_deed) {
+      const [result] = await connection.query(
+        'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
+        [files.title_deed[0].originalname, `/uploads/${files.title_deed[0].filename}`, 'loan_applications']
+      );
+      documentFields.title_deed = result.insertId;
+      documentInserts.push(result.insertId);
+    }
+    
+    if (files.vehicle_reg_card) {
+      const [result] = await connection.query(
+        'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
+        [files.vehicle_reg_card[0].originalname, `/uploads/${files.vehicle_reg_card[0].filename}`, 'loan_applications']
+      );
+      documentFields.vehicle_reg_card = result.insertId;
+      documentInserts.push(result.insertId);
+    }
+    
+    if (files.csee_certificate) {
+      const [result] = await connection.query(
+        'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
+        [files.csee_certificate[0].originalname, `/uploads/${files.csee_certificate[0].filename}`, 'loan_applications']
+      );
+      documentFields.csee_certificate = result.insertId;
+      documentInserts.push(result.insertId);
+    }
+    
+    if (files.acse_certificate) {
+      const [result] = await connection.query(
+        'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
+        [files.acse_certificate[0].originalname, `/uploads/${files.acse_certificate[0].filename}`, 'loan_applications']
+      );
+      documentFields.acse_certificate = result.insertId;
+      documentInserts.push(result.insertId);
+    }
+    
+    if (files.higher_edu_certificate) {
+      const [result] = await connection.query(
+        'INSERT INTO documents (filename, path, related_table) VALUES (?, ?, ?)',
+        [files.higher_edu_certificate[0].originalname, `/uploads/${files.higher_edu_certificate[0].filename}`, 'loan_applications']
+      );
+      documentFields.higher_edu_certificate = result.insertId;
+      documentInserts.push(result.insertId);
+    }
+    
+    // Build the SQL query dynamically based on available document fields
+    const fields = [
+      'applicant_name', 'nida_id', 'loan_amount', 'term_months', 'interest_rate',
+      'employment_status', 'mode_of_repayment', 'sponsor1_name', 'sponsor1_id',
+      'sponsor2_name', 'sponsor2_id', 'status'
+    ];
+    
+    const values = [
+      applicant_name, nida_id, loan_amount, term_months, interest_rate,
+      employment_status, mode_of_repayment, sponsor1_name, sponsor1_id,
+      sponsor2_name, sponsor2_id, 'pending'
+    ];
+    
+    // Add document fields to the query
+    Object.keys(documentFields).forEach(field => {
+      fields.push(field);
+      values.push(documentFields[field]);
+    });
+    
+    const placeholders = values.map(() => '?').join(', ');
     const [applicationResult] = await connection.query(
-      `INSERT INTO loan_applications (
-        applicant_name, nida_id, loan_amount, term_months, interest_rate,
-        employment_status, employment_proof, mode_of_repayment,
-        sponsor1_name, sponsor1_id, sponsor1_doc,
-        sponsor2_name, sponsor2_id, sponsor2_doc,
-        terms_doc, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        applicant_name, nida_id, loan_amount, term_months, interest_rate,
-        employment_status, employmentProofResult.insertId, mode_of_repayment,
-        sponsor1_name, sponsor1_id, sponsor1DocResult.insertId,
-        sponsor2_name, sponsor2_id, sponsor2DocResult.insertId,
-        termsDocResult.insertId, 'pending'
-      ]
+      `INSERT INTO loan_applications (${fields.join(', ')}) VALUES (${placeholders})`,
+      values
     );
     
     const applicationId = applicationResult.insertId;
     
-    await connection.query(
-      'UPDATE documents SET related_id = ? WHERE id IN (?, ?, ?, ?)',
-      [applicationId, employmentProofResult.insertId, sponsor1DocResult.insertId, 
-       sponsor2DocResult.insertId, termsDocResult.insertId]
-    );
+    // Update document related_id
+    if (documentInserts.length > 0) {
+      await connection.query(
+        'UPDATE documents SET related_id = ? WHERE id IN (?)',
+        [applicationId, documentInserts]
+      );
+    }
     
     await connection.commit();
     await logAudit(req.user.id, 'CREATE_APPLICATION', `Created loan application for ${applicant_name}`);
@@ -436,6 +547,7 @@ app.put('/api/loan-applications/:id/status', authenticateToken, async (req, res)
         );
       }
       
+      // Add loan disbursement to cash flow
       await connection.query(
         'INSERT INTO cash_flow (type, amount, description, date, related_id) VALUES (?, ?, ?, ?, ?)',
         ['loan_disbursement', loanAmount, `Loan disbursement to ${application.applicant_name}`, now.toISOString().split('T')[0], id]
@@ -462,8 +574,14 @@ app.delete('/api/loan-applications/:id', authenticateToken, async (req, res) => 
   
   try {
     await connection.beginTransaction();
+    
+    // Get all document IDs associated with this application
     const [applications] = await connection.query(
-      'SELECT employment_proof, sponsor1_doc, sponsor2_doc, terms_doc FROM loan_applications WHERE id = ?',
+      `SELECT 
+        employment_proof, sponsor1_doc, sponsor2_doc, terms_doc,
+        local_govt_letter, title_deed, vehicle_reg_card, 
+        csee_certificate, acse_certificate, higher_edu_certificate
+      FROM loan_applications WHERE id = ?`,
       [id]
     );
     
@@ -473,10 +591,17 @@ app.delete('/api/loan-applications/:id', authenticateToken, async (req, res) => 
     }
     
     const application = applications[0];
-    const documentIds = [application.employment_proof, application.sponsor1_doc, application.sponsor2_doc, application.terms_doc].filter(id => id !== null);
     
+    // Collect all document IDs
+    const documentIds = Object.values(application).filter(id => id !== null);
+    
+    // Delete related cash flow entries
     await connection.query('DELETE FROM cash_flow WHERE related_id = ?', [id]);
+    
+    // Delete the application (this will cascade delete repayments)
     await connection.query('DELETE FROM loan_applications WHERE id = ?', [id]);
+    
+    // Delete associated documents
     if (documentIds.length > 0) {
       await connection.query('DELETE FROM documents WHERE id IN (?)', [documentIds]);
     }
@@ -496,8 +621,17 @@ app.delete('/api/loan-applications/:id', authenticateToken, async (req, res) => 
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   try {
     const [applicationsCountResult] = await pool.query('SELECT COUNT(*) as count FROM loan_applications');
-    const [incomeResult] = await pool.query('SELECT SUM(amount) as total FROM cash_flow WHERE type IN ("income", "loan_repayment")');
-    const [expensesResult] = await pool.query('SELECT SUM(amount) as total FROM cash_flow WHERE type IN ("expense", "loan_disbursement")');
+    
+    // Calculate total income (income + loan_repayment)
+    const [incomeResult] = await pool.query(
+      'SELECT SUM(amount) as total FROM cash_flow WHERE type IN ("income", "loan_repayment")'
+    );
+    
+    // Calculate total expenses (expense + loan_disbursement)
+    const [expensesResult] = await pool.query(
+      'SELECT SUM(amount) as total FROM cash_flow WHERE type IN ("expense", "loan_disbursement")'
+    );
+    
     const [recentApplications] = await pool.query('SELECT * FROM loan_applications ORDER BY created_at DESC LIMIT 5');
     const [recentTransactions] = await pool.query('SELECT * FROM cash_flow ORDER BY date DESC LIMIT 5');
     
@@ -568,7 +702,7 @@ app.put('/api/cash-flow/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ message: 'System-generated transactions cannot be modified' });
     }
     
-    const updates = [];
+    constupdates = [];
     const values = [];
     if (type) {
       if (!['income', 'expense'].includes(type)) {
@@ -660,6 +794,8 @@ app.post('/api/repayments/:id/pay', authenticateToken, async (req, res) => {
     }
     
     await connection.query('UPDATE loan_repayments SET paid = 1, paid_date = ? WHERE id = ?', [paymentDate, id]);
+    
+    // Add loan repayment to cash flow
     await connection.query(
       'INSERT INTO cash_flow (type, amount, description, date, related_id) VALUES (?, ?, ?, ?, ?)',
       ['loan_repayment', repayment.amount, `Loan repayment from ${repayment.applicant_name}`, paymentDate, repayment.application_id]

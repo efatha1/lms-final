@@ -1,49 +1,33 @@
-const express = require('express');
-const { createServer: createViteServer } = require('vite');
-const { spawn } = require('child_process');
-const path = require('path');
+import { spawn } from 'child_process';
+import { createServer } from 'vite';
 
-async function createServer() {
-  const app = express();
-  const PORT = process.env.PORT || 3000;
+// Start the backend server
+const backendServer = spawn('node', ['server/index.js'], { stdio: 'inherit' });
 
-  // Create Vite server in middleware mode for hot-reloading
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-    root: path.resolve(__dirname),
-  });
+// Start the Vite dev server
+const viteServer = await createServer({
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/uploads': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      }
+    },
+  },
+});
 
-  // Use Vite's connect instance as middleware
-  app.use(vite.middlewares);
+await viteServer.listen();
 
-  // Start the backend server as a child process
-  const serverProcess = spawn('node', ['index.js'], {
-    cwd: path.join(__dirname, 'server'),
-    stdio: 'inherit',
-    env: { ...process.env, PORT: 3000 }
-  });
+console.log('Development server running with backend proxy');
 
-  // Handle server process exit
-  serverProcess.on('exit', (code) => {
-    console.log(`Backend server exited with code ${code}`);
-    process.exit(code);
-  });
-
-  // Handle process termination (Ctrl+C)
-  process.on('SIGINT', () => {
-    serverProcess.kill('SIGINT');
-    vite.close();
-    process.exit(0);
-  });
-
-  // Start the development server
-  app.listen(PORT, () => {
-    console.log(`Development server running at http://localhost:${PORT}`);
-  });
-}
-
-createServer().catch((err) => {
-  console.error('Error starting development server:', err);
-  process.exit(1);
+// Handle process termination
+process.on('SIGINT', () => {
+  console.log('Shutting down development servers...');
+  backendServer.kill();
+  viteServer.close();
+  process.exit();
 });
