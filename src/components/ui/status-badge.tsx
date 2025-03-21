@@ -1,10 +1,8 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 
-type StatusType = 'pending' | 'approved' | 'rejected' | 'paid' | 'overdue' | 'due-soon';
-
 interface StatusBadgeProps {
-  status: StatusType;
+  status: 'pending' | 'approved' | 'rejected';
   className?: string;
 }
 
@@ -13,9 +11,6 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
     approved: 'bg-green-100 text-green-800 border-green-200',
     rejected: 'bg-red-100 text-red-800 border-red-200',
-    paid: 'bg-green-100 text-green-800 border-green-200',
-    overdue: 'bg-red-100 text-red-800 border-red-200',
-    'due-soon': 'bg-yellow-100 text-yellow-800 border-yellow-200',
   };
 
   return (
@@ -26,7 +21,7 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
         className
       )}
     >
-      {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
+      {status.charAt(0).toUpperCase() + status.slice(1)}
     </span>
   );
 }

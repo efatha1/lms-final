@@ -1,49 +1,51 @@
-const express = require('express');
-const { createServer: createViteServer } = require('vite');
-const { spawn } = require('child_process');
-const path = require('path');
+import { createServer } from 'vite';
+import { spawn } from 'child_process';
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-async function createServer() {
-  const app = express();
-  const PORT = process.env.PORT || 3000;
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
-  // Create Vite server in middleware mode for hot-reloading
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-    root: path.resolve(__dirname),
+async function startDevServer() {
+  // Start Vite dev server
+  const vite = await createServer({
+    configFile: './vite.config.ts',
+    server: {
+      port: 5173,
+      strictPort: true,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+        '/uploads': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+        },
+      },
+    },
   });
 
-  // Use Vite's connect instance as middleware
-  app.use(vite.middlewares);
+  await vite.listen();
+  console.log('Vite dev server started at http://localhost:5173');
 
-  // Start the backend server as a child process
-  const serverProcess = spawn('node', ['index.js'], {
-    cwd: path.join(__dirname, 'server'),
+  // Start backend server
+  const backend = spawn('node', ['server/index.js'], {
     stdio: 'inherit',
-    env: { ...process.env, PORT: 3000 }
+    shell: true,
   });
 
-  // Handle server process exit
-  serverProcess.on('exit', (code) => {
-    console.log(`Backend server exited with code ${code}`);
-    process.exit(code);
+  backend.on('error', (err) => {
+    console.error('Failed to start backend server:', err);
   });
 
-  // Handle process termination (Ctrl+C)
   process.on('SIGINT', () => {
-    serverProcess.kill('SIGINT');
     vite.close();
-    process.exit(0);
-  });
-
-  // Start the development server
-  app.listen(PORT, () => {
-    console.log(`Development server running at http://localhost:${PORT}`);
+    backend.kill('SIGINT');
+    process.exit();
   });
 }
 
-createServer().catch((err) => {
-  console.error('Error starting development server:', err);
+startDevServer().catch((err) => {
+  console.error('Error starting development servers:', err);
   process.exit(1);
 });

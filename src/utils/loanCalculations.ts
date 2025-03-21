@@ -1,86 +1,93 @@
 import { RepaymentSchedule } from '../types';
 
-export const calculateMonthlyPayment = (
+export function calculateTotalRepayment(
   principal: number,
-  annualInterestRate: number,
+  interestRate: number,
   termMonths: number
-): number => {
-  const monthlyInterestRate = annualInterestRate / 100 / 12;
-  return (
-    (principal * monthlyInterestRate * Math.pow(1 + monthlyInterestRate, termMonths)) /
-    (Math.pow(1 + monthlyInterestRate, termMonths) - 1)
-  );
-};
+): number {
+  const monthlyInterestRate = interestRate / 100 / 12;
+  const totalInterest = principal * monthlyInterestRate * termMonths;
+  return principal + totalInterest;
+}
 
-export const calculateWeeklyPayment = (
+export function calculateMonthlyPayment(
   principal: number,
-  annualInterestRate: number,
+  interestRate: number,
   termMonths: number
-): number => {
-  const weeklyInterestRate = annualInterestRate / 100 / 52;
-  const termWeeks = Math.round(termMonths * 4.33);
-  return (
-    (principal * weeklyInterestRate * Math.pow(1 + weeklyInterestRate, termWeeks)) /
-    (Math.pow(1 + weeklyInterestRate, termWeeks) - 1)
-  );
-};
+): number {
+  const monthlyInterestRate = interestRate / 100 / 12;
+  const totalRepayment = calculateTotalRepayment(principal, interestRate, termMonths);
+  return totalRepayment / termMonths;
+}
 
-export const generateRepaymentSchedule = (
+export function calculateWeeklyPayment(
   principal: number,
-  annualInterestRate: number,
+  interestRate: number,
+  termMonths: number
+): number {
+  const monthlyPayment = calculateMonthlyPayment(principal, interestRate, termMonths);
+  return monthlyPayment / 4; // Approximate weeks in a month
+}
+
+export function generateRepaymentSchedule(
+  principal: number,
+  interestRate: number,
   termMonths: number,
   mode: 'weekly' | 'monthly',
-  startDate: Date = new Date()
-): RepaymentSchedule[] => {
+  startDate: Date
+): RepaymentSchedule[] {
   const schedule: RepaymentSchedule[] = [];
+  const monthlyInterestRate = interestRate / 100 / 12;
+  const weeklyInterestRate = monthlyInterestRate / 4;
+  
   let remainingBalance = principal;
-  const interestRate = mode === 'monthly' 
-    ? annualInterestRate / 100 / 12 
-    : annualInterestRate / 100 / 52;
+  let currentDate = new Date(startDate);
   
-  const payment = mode === 'monthly'
-    ? calculateMonthlyPayment(principal, annualInterestRate, termMonths)
-    : calculateWeeklyPayment(principal, annualInterestRate, termMonths);
-  
-  const periods = mode === 'monthly' ? termMonths : Math.round(termMonths * 4.33);
-  
-  for (let i = 1; i <= periods; i++) {
-    const interestPayment = remainingBalance * interestRate;
-    const principalPayment = payment - interestPayment;
-    remainingBalance -= principalPayment;
+  if (mode === 'monthly') {
+    const monthlyPayment = calculateMonthlyPayment(principal, interestRate, termMonths);
     
-    // Calculate due date
-    const dueDate = new Date(startDate);
-    if (mode === 'monthly') {
-      dueDate.setMonth(dueDate.getMonth() + i);
-    } else {
-      dueDate.setDate(dueDate.getDate() + (i * 7));
+    for (let i = 1; i <= termMonths; i++) {
+      currentDate = new Date(currentDate);
+      currentDate.setMonth(currentDate.getMonth() + 1);
+      
+      const interestPayment = remainingBalance * monthlyInterestRate;
+      const principalPayment = monthlyPayment - interestPayment;
+      
+      remainingBalance -= principalPayment;
+      
+      schedule.push({
+        payment_number: i,
+        due_date: currentDate.toISOString(),
+        principal: principalPayment,
+        interest: interestPayment,
+        total_payment: monthlyPayment,
+        remaining_balance: Math.max(0, remainingBalance),
+      });
     }
+  } else {
+    // Weekly repayment
+    const totalWeeks = termMonths * 4; // Approximate weeks in months
+    const weeklyPayment = calculateWeeklyPayment(principal, interestRate, termMonths);
     
-    schedule.push({
-      payment_number: i,
-      due_date: dueDate.toISOString(),
-      principal: principalPayment,
-      interest: interestPayment,
-      total_payment: payment,
-      remaining_balance: Math.max(0, remainingBalance),
-    });
+    for (let i = 1; i <= totalWeeks; i++) {
+      currentDate = new Date(currentDate);
+      currentDate.setDate(currentDate.getDate() + 7); // Add 7 days
+      
+      const interestPayment = remainingBalance * weeklyInterestRate;
+      const principalPayment = weeklyPayment - interestPayment;
+      
+      remainingBalance -= principalPayment;
+      
+      schedule.push({
+        payment_number: i,
+        due_date: currentDate.toISOString(),
+        principal: principalPayment,
+        interest: interestPayment,
+        total_payment: weeklyPayment,
+        remaining_balance: Math.max(0, remainingBalance),
+      });
+    }
   }
   
   return schedule;
-};
-
-export const calculateTotalRepayment = (
-  principal: number,
-  annualInterestRate: number,
-  termMonths: number,
-  mode: 'weekly' | 'monthly'
-): number => {
-  const payment = mode === 'monthly'
-    ? calculateMonthlyPayment(principal, annualInterestRate, termMonths)
-    : calculateWeeklyPayment(principal, annualInterestRate, termMonths);
-  
-  const periods = mode === 'monthly' ? termMonths : Math.round(termMonths * 4.33);
-  
-  return payment * periods;
-};
+}

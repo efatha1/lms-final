@@ -3,32 +3,31 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { fetchCashFlow, createCashFlow, updateCashFlow, deleteCashFlow } from '../api/cashFlow';
 import { PageContainer } from '../components/layout/PageContainer';
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
+import { Card } from '../components/ui/card';
 import { Modal } from '../components/ui/modal';
 import { CashFlow } from '../types';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { 
   Plus, 
   Search, 
-  Edit2, 
+  Edit, 
   Trash2, 
   TrendingUp, 
   TrendingDown,
   Loader2,
   ChevronLeft,
   ChevronRight,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Lock
+  Filter
 } from 'lucide-react';
 
 export default function CashFlowPage() {
   const { token } = useAuth();
   const { showToast } = useToast();
-  const [transactions, setTransactions] = useState<CashFlow[]>([]);
-  const [filteredTransactions, setFilteredTransactions] = useState<CashFlow[]>([]);
+  const [cashFlowData, setCashFlowData] = useState<CashFlow[]>([]);
+  const [filteredData, setFilteredData] = useState<CashFlow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -37,7 +36,7 @@ export default function CashFlowPage() {
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedTransaction, setSelectedTransaction] = useState<CashFlow | null>(null);
+  const [selectedCashFlow, setSelectedCashFlow] = useState<CashFlow | null>(null);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -48,26 +47,15 @@ export default function CashFlowPage() {
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // Summary calculations
-  const totalIncome = transactions
-    .filter(t => t.type === 'income' || t.type === 'loan_repayment')
-    .reduce((sum, t) => sum + t.amount, 0);
-    
-  const totalExpenses = transactions
-    .filter(t => t.type === 'expense' || t.type === 'loan_disbursement')
-    .reduce((sum, t) => sum + t.amount, 0);
-    
-  const netCashFlow = totalIncome - totalExpenses;
 
   useEffect(() => {
-    const loadTransactions = async () => {
+    const loadCashFlowData = async () => {
       if (!token) return;
       
       try {
         const data = await fetchCashFlow(token);
-        setTransactions(data);
-        setFilteredTransactions(data);
+        setCashFlowData(data);
+        setFilteredData(data);
       } catch (error) {
         showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to load cash flow data');
       } finally {
@@ -75,34 +63,51 @@ export default function CashFlowPage() {
       }
     };
 
-    loadTransactions();
+    loadCashFlowData();
   }, [token, showToast]);
 
-  // Filter transactions based on search query
+  // Filter and search
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredTransactions(transactions);
-    } else {
-      const lowercaseQuery = searchQuery.toLowerCase();
-      const filtered = transactions.filter(
-        transaction => 
-          transaction.description.toLowerCase().includes(lowercaseQuery) ||
-          transaction.type.toLowerCase().includes(lowercaseQuery) ||
-          transaction.amount.toString().includes(lowercaseQuery) ||
-          formatDate(transaction.date).toLowerCase().includes(lowercaseQuery)
-      );
-      setFilteredTransactions(filtered);
+    let filtered = [...cashFlowData];
+    
+    // Filter by type
+    if (filterType !== 'all') {
+      filtered = filtered.filter(item => item.type === filterType);
     }
+    
+    // Filter by search query
+    if (searchQuery) {
+      const lowercaseQuery = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        item => 
+          item.description.toLowerCase().includes(lowercaseQuery) ||
+          item.amount.toString().includes(lowercaseQuery) ||
+          formatDate(item.date).toLowerCase().includes(lowercaseQuery)
+      );
+    }
+    
+    setFilteredData(filtered);
     setCurrentPage(1); // Reset to first page when filtering
-  }, [searchQuery, transactions]);
+  }, [searchQuery, filterType, cashFlowData]);
 
-  // Get current transactions for pagination
+  // Get current items for pagination
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentTransactions = filteredTransactions.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+  const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
-  const handleCreateTransaction = async (e: React.FormEvent) => {
+  // Calculate totals
+  const totalIncome = filteredData
+    .filter(item => item.type === 'income' || item.type === 'loan_repayment')
+    .reduce((sum, item) => sum + item.amount, 0);
+    
+  const totalExpense = filteredData
+    .filter(item => item.type === 'expense' || item.type === 'loan_disbursement')
+    .reduce((sum, item) => sum + item.amount, 0);
+    
+  const netCashFlow = totalIncome - totalExpense;
+
+  const handleCreateCashFlow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) return;
     
@@ -116,31 +121,31 @@ export default function CashFlowPage() {
     }
     
     try {
-      const newTransaction = await createCashFlow(token, {
-        type: formData.type as 'income' | 'expense',
+      const newCashFlow = await createCashFlow(token, {
+        type: formData.type as 'income' | 'expense' | 'loan_disbursement' | 'loan_repayment',
         amount: parseFloat(formData.amount),
         description: formData.description,
         date: formData.date,
       });
       
       // Update local state
-      setTransactions([newTransaction, ...transactions]);
+      setCashFlowData([newCashFlow, ...cashFlowData]);
       
-      showToast('success', 'Transaction Created', 'Cash flow transaction created successfully');
+      showToast('success', 'Cash Flow Created', 'Cash flow entry created successfully');
       
       // Reset form and close modal
       resetForm();
       setIsCreateModalOpen(false);
     } catch (error) {
-      showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to create transaction');
+      showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to create cash flow entry');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEditTransaction = async (e: React.FormEvent) => {
+  const handleEditCashFlow = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token || !selectedTransaction) return;
+    if (!token || !selectedCashFlow) return;
     
     setIsSubmitting(true);
     
@@ -152,34 +157,34 @@ export default function CashFlowPage() {
     }
     
     try {
-      const updatedTransaction = await updateCashFlow(token, selectedTransaction.id, {
-        type: formData.type as 'income' | 'expense',
+      const updatedCashFlow = await updateCashFlow(token, selectedCashFlow.id, {
+        type: formData.type as 'income' | 'expense' | 'loan_disbursement' | 'loan_repayment',
         amount: parseFloat(formData.amount),
         description: formData.description,
         date: formData.date,
       });
       
       // Update local state
-      setTransactions(transactions.map(t => 
-        t.id === selectedTransaction.id ? updatedTransaction : t
+      setCashFlowData(cashFlowData.map(item => 
+        item.id === selectedCashFlow.id ? updatedCashFlow : item
       ));
       
-      showToast('success', 'Transaction Updated', 'Cash flow transaction updated successfully');
+      showToast('success', 'Cash Flow Updated', 'Cash flow entry updated successfully');
       
       // Reset form and close modal
       resetForm();
       setIsEditModalOpen(false);
     } catch (error) {
-      showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to update transaction');
+      showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to update cash flow entry');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDeleteTransaction = async (id: number) => {
+  const handleDeleteCashFlow = async (id: number) => {
     if (!token) return;
     
-    if (!window.confirm('Are you sure you want to delete this transaction?')) {
+    if (!window.confirm('Are you sure you want to delete this cash flow entry?')) {
       return;
     }
     
@@ -187,11 +192,11 @@ export default function CashFlowPage() {
       await deleteCashFlow(token, id);
       
       // Update local state
-      setTransactions(transactions.filter(t => t.id !== id));
+      setCashFlowData(cashFlowData.filter(item => item.id !== id));
       
-      showToast('success', 'Transaction Deleted', 'Cash flow transaction deleted successfully');
+      showToast('success', 'Cash Flow Deleted', 'Cash flow entry deleted successfully');
     } catch (error) {
-      showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to delete transaction');
+      showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to delete cash flow entry');
     }
   };
 
@@ -202,6 +207,7 @@ export default function CashFlowPage() {
       description: '',
       date: new Date().toISOString().split('T')[0],
     });
+    setSelectedCashFlow(null);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -209,64 +215,22 @@ export default function CashFlowPage() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const openEditModal = (transaction: CashFlow) => {
-    // Check if this is a system-generated transaction
-    if (transaction.type === 'loan_disbursement' || transaction.type === 'loan_repayment') {
-      showToast('info', 'System Transaction', 'Loan-related transactions are generated automatically and cannot be edited');
-      return;
-    }
-    
-    setSelectedTransaction(transaction);
+  const openEditModal = (cashFlow: CashFlow) => {
+    setSelectedCashFlow(cashFlow);
     setFormData({
-      type: transaction.type,
-      amount: transaction.amount.toString(),
-      description: transaction.description,
-      date: new Date(transaction.date).toISOString().split('T')[0],
+      type: cashFlow.type,
+      amount: cashFlow.amount.toString(),
+      description: cashFlow.description,
+      date: new Date(cashFlow.date).toISOString().split('T')[0],
     });
     setIsEditModalOpen(true);
-  };
-
-  // Helper function to get transaction type icon and style
-  const getTransactionTypeInfo = (type: string) => {
-    switch(type) {
-      case 'income':
-        return {
-          icon: <TrendingUp className="h-3 w-3 mr-1" />,
-          className: 'bg-green-100 text-green-800',
-          label: 'Income'
-        };
-      case 'expense':
-        return {
-          icon: <TrendingDown className="h-3 w-3 mr-1" />,
-          className: 'bg-red-100 text-red-800',
-          label: 'Expense'
-        };
-      case 'loan_disbursement':
-        return {
-          icon: <ArrowUpRight className="h-3 w-3 mr-1" />,
-          className: 'bg-blue-100 text-blue-800',
-          label: 'Loan Disbursement'
-        };
-      case 'loan_repayment':
-        return {
-          icon: <ArrowDownLeft className="h-3 w-3 mr-1" />,
-          className: 'bg-purple-100 text-purple-800',
-          label: 'Loan Repayment'
-        };
-      default:
-        return {
-          icon: <TrendingUp className="h-3 w-3 mr-1" />,
-          className: 'bg-gray-100 text-gray-800',
-          label: type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')
-        };
-    }
   };
 
   if (isLoading) {
     return (
       <PageContainer title="Cash Flow">
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
         </div>
       </PageContainer>
     );
@@ -275,77 +239,108 @@ export default function CashFlowPage() {
   return (
     <PageContainer title="Cash Flow">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <Card>
-          <CardContent className="flex items-center py-4">
-            <div className="p-3 rounded-full bg-green-100 text-green-600 mr-4">
-              <TrendingUp className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Total Income</p>
-              <h3 className="text-2xl font-bold text-green-600">{formatCurrency(totalIncome)}</h3>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="flex items-center py-4">
-            <div className="p-3 rounded-full bg-red-100 text-red-600 mr-4">
-              <TrendingDown className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Total Expenses</p>
-              <h3 className="text-2xl font-bold text-red-600">{formatCurrency(totalExpenses)}</h3>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card>
-          <CardContent className="flex items-center py-4">
-            <div className={`p-3 rounded-full ${netCashFlow >= 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} mr-4`}>
-              {netCashFlow >= 0 ? (
+          <div className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-green-100 text-green-600">
                 <TrendingUp className="h-6 w-6" />
-              ) : (
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Total Income</p>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(totalIncome)}
+                </h3>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="p-6">
+            <div className="flex items-center">
+              <div className="p-3 rounded-full bg-red-100 text-red-600">
                 <TrendingDown className="h-6 w-6" />
-              )}
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Total Expenses</p>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(totalExpense)}
+                </h3>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">Net Cash Flow</p>
-              <h3 className={`text-2xl font-bold ${netCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {formatCurrency(Math.abs(netCashFlow))}
-                {netCashFlow < 0 && ' (Deficit)'}
-              </h3>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="p-6">
+            <div className="flex items-center">
+              <div className={`p-3 rounded-full ${
+                netCashFlow >= 0 ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'
+              }`}>
+                {netCashFlow >= 0 ? (
+                  <TrendingUp className="h-6 w-6" />
+                ) : (
+                  <TrendingDown className="h-6 w-6" />
+                )}
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500">Net Cash Flow</p>
+                <h3 className={`text-2xl font-bold ${
+                  netCashFlow >= 0 ? 'text-blue-600' : 'text-red-600'
+                }`}>
+                  {formatCurrency(Math.abs(netCashFlow))}
+                  {netCashFlow < 0 && ' (Deficit)'}
+                </h3>
+              </div>
             </div>
-          </CardContent>
+          </div>
         </Card>
       </div>
-      
-      {/* Transactions Table */}
+
       <Card className="mb-6">
         <div className="p-6">
           <div className="flex flex-col md:flex-row justify-between mb-4">
-            <div className="relative mb-4 md:mb-0 md:w-64">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" />
+            <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 mb-4 md:mb-0">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                />
               </div>
-              <input
-                type="text"
-                placeholder="Search transactions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-              />
+              
+              <div className="flex items-center">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Filter className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="income">Income</option>
+                    <option value="expense">Expense</option>
+                    <option value="loan_disbursement">Loan Disbursement</option>
+                    <option value="loan_repayment">Loan Repayment</option>
+                  </select>
+                </div>
+              </div>
             </div>
             
             <button
-              onClick={() => {
-                resetForm();
-                setIsCreateModalOpen(true);
-              }}
+              onClick={() => setIsCreateModalOpen(true)}
               className="flex items-center justify-center px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
             >
               <Plus className="h-5 w-5 mr-2" />
-              New Transaction
+              Add Entry
             </button>
           </div>
           
@@ -353,9 +348,6 @@ export default function CashFlowPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Description
                   </th>
@@ -366,78 +358,70 @@ export default function CashFlowPage() {
                     Amount
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {currentTransactions.length > 0 ? (
-                  currentTransactions.map(transaction => {
-                    const typeInfo = getTransactionTypeInfo(transaction.type);
-                    const isSystemTransaction = transaction.type === 'loan_disbursement' || transaction.type === 'loan_repayment';
-                    
-                    return (
-                      <tr key={transaction.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {formatDate(transaction.date)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {transaction.description}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${typeInfo.className}`}
+                {currentItems.length > 0 ? (
+                  currentItems.map(cashFlow => (
+                    <tr key={cashFlow.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{cashFlow.description}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          cashFlow.type === 'income' || cashFlow.type === 'loan_repayment'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {cashFlow.type === 'income' ? 'Income' : 
+                           cashFlow.type === 'expense' ? 'Expense' :
+                           cashFlow.type === 'loan_disbursement' ? 'Loan Disbursement' : 'Loan Repayment'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className={`text-sm ${
+                          cashFlow.type === 'income' || cashFlow.type === 'loan_repayment'
+                            ? 'text-green-600'
+                            : 'text-red-600'
+                        }`}>
+                          {cashFlow.type === 'income' || cashFlow.type === 'loan_repayment' ? '+' : '-'}
+                          {formatCurrency(cashFlow.amount)}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500">{formatDate(cashFlow.date)}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => openEditModal(cashFlow)}
+                            className="p-1 text-blue-600 hover:text-blue-800"
                           >
-                            {typeInfo.icon}
-                            {typeInfo.label}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={
-                              transaction.type === 'income' || transaction.type === 'loan_repayment' 
-                                ? 'text-green-600' 
-                                : 'text-red-600'
-                            }
+                            <Edit className="h-5 w-5" />
+                          </button>
+                          
+                          <button
+                            onClick={() => handleDeleteCashFlow(cashFlow.id)}
+                            className="p-1 text-red-600 hover:text-red-800"
                           >
-                            {formatCurrency(transaction.amount)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex space-x-2">
-                            {isSystemTransaction ? (
-                              <span className="text-gray-400 flex items-center" title="System-generated transaction">
-                                <Lock className="h-5 w-5" />
-                              </span>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => openEditModal(transaction)}
-                                  className="p-1 text-blue-600 hover:text-blue-800"
-                                >
-                                  <Edit2 className="h-5 w-5" />
-                                </button>
-                                
-                                <button
-                                  onClick={() => handleDeleteTransaction(transaction.id)}
-                                  className="p-1 text-red-600 hover:text-red-800"
-                                >
-                                  <Trash2 className="h-5 w-5" />
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
                 ) : (
                   <tr>
                     <td
                       colSpan={5}
                       className="px-6 py-4 text-center text-sm text-gray-500"
                     >
-                      No transactions found
+                      No cash flow entries found
                     </td>
                   </tr>
                 )}
@@ -477,7 +461,7 @@ export default function CashFlowPage() {
         </div>
       </Card>
       
-      {/* Create Transaction Modal */}
+      {/* Create Cash Flow Modal */}
       <Modal
         isOpen={isCreateModalOpen}
         onClose={() => {
@@ -486,10 +470,10 @@ export default function CashFlowPage() {
             resetForm();
           }
         }}
-        title="Create Transaction"
+        title="Add Cash Flow Entry"
         size="md"
       >
-        <form onSubmit={handleCreateTransaction}>
+        <form onSubmit={handleCreateCashFlow}>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -505,10 +489,9 @@ export default function CashFlowPage() {
               >
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
+                <option value="loan_disbursement">Loan Disbursement</option>
+                <option value="loan_repayment">Loan Repayment</option>
               </select>
-              <p className="mt-1 text-xs text-gray-500">
-                Note: Loan disbursements and repayments are automatically recorded when loans are approved or repayments are made.
-              </p>
             </div>
             
             <div>
@@ -522,7 +505,7 @@ export default function CashFlowPage() {
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
                 required
-                min="0.01"
+                min="0"
                 step="0.01"
                 disabled={isSubmitting}
               />
@@ -537,10 +520,10 @@ export default function CashFlowPage() {
                 value={formData.description}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                rows={3}
                 required
+                rows={3}
                 disabled={isSubmitting}
-              />
+              ></textarea>
             </div>
             
             <div>
@@ -584,14 +567,14 @@ export default function CashFlowPage() {
                   Submitting...
                 </>
               ) : (
-                'Create Transaction'
+                'Add Entry'
               )}
             </button>
           </div>
         </form>
       </Modal>
       
-      {/* Edit Transaction Modal */}
+      {/* Edit Cash Flow Modal */}
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => {
@@ -600,10 +583,10 @@ export default function CashFlowPage() {
             resetForm();
           }
         }}
-        title="Edit Transaction"
+        title="Edit Cash Flow Entry"
         size="md"
       >
-        <form onSubmit={handleEditTransaction}>
+        <form onSubmit={handleEditCashFlow}>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -619,6 +602,8 @@ export default function CashFlowPage() {
               >
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
+                <option value="loan_disbursement">Loan Disbursement</option>
+                <option value="loan_repayment">Loan Repayment</option>
               </select>
             </div>
             
@@ -633,7 +618,7 @@ export default function CashFlowPage() {
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
                 required
-                min="0.01"
+                min="0"
                 step="0.01"
                 disabled={isSubmitting}
               />
@@ -648,10 +633,10 @@ export default function CashFlowPage() {
                 value={formData.description}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary"
-                rows={3}
                 required
+                rows={3}
                 disabled={isSubmitting}
-              />
+              ></textarea>
             </div>
             
             <div>
@@ -695,7 +680,7 @@ export default function CashFlowPage() {
                   Updating...
                 </>
               ) : (
-                'Update Transaction'
+                'Update Entry'
               )}
             </button>
           </div>

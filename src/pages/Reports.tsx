@@ -5,287 +5,333 @@ import { fetchCashFlowReport, fetchLoanApplicationsReport } from '../api/reports
 import { PageContainer } from '../components/layout/PageContainer';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { CashFlowReport, LoanStatusReport } from '../types';
-import { formatCurrency } from '../utils/formatters';
-import { Download, FileText, DollarSign, Info } from 'lucide-react';
+import { formatCurrency, formatDate } from '../utils/formatters';
+import { 
+  BarChart3, 
+  PieChart, 
+  Calendar,
+  Download,
+  Loader2
+} from 'lucide-react';
 
 export default function Reports() {
   const { token } = useAuth();
   const { showToast } = useToast();
-  const [cashFlowData, setCashFlowData] = useState<CashFlowReport[]>([]);
-  const [loanStatusData, setLoanStatusData] = useState<LoanStatusReport[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   
   // Date range for cash flow report
-  const [dateRange, setDateRange] = useState({
-    startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+  const [startDate, setStartDate] = useState<string>(() => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 1);
+    return date.toISOString().split('T')[0];
   });
+  const [endDate, setEndDate] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0];
+  });
+  
+  // Report data
+  const [cashFlowData, setCashFlowData] = useState<CashFlowReport[]>([]);
+  const [loanStatusData, setLoanStatusData] = useState<LoanStatusReport[]>([]);
+  
+  // Loading states
+  const [isLoadingCashFlow, setIsLoadingCashFlow] = useState(true);
+  const [isLoadingLoanStatus, setIsLoadingLoanStatus] = useState(true);
 
   useEffect(() => {
-    const loadReportData = async () => {
+    const loadReports = async () => {
       if (!token) return;
       
+      // Load cash flow report
       try {
-        const [cashFlowData, loanStatusData] = await Promise.all([
-          fetchCashFlowReport(token, dateRange.startDate, dateRange.endDate),
-          fetchLoanApplicationsReport(token),
-        ]);
-        
-        setCashFlowData(cashFlowData);
-        setLoanStatusData(loanStatusData);
+        const cashFlowReport = await fetchCashFlowReport(token, startDate, endDate);
+        setCashFlowData(cashFlowReport);
       } catch (error) {
-        showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to load report data');
+        showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to load cash flow report');
       } finally {
-        setIsLoading(false);
+        setIsLoadingCashFlow(false);
+      }
+      
+      // Load loan status report
+      try {
+        const loanStatusReport = await fetchLoanApplicationsReport(token);
+        setLoanStatusData(loanStatusReport);
+      } catch (error) {
+        showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to load loan status report');
+      } finally {
+        setIsLoadingLoanStatus(false);
       }
     };
 
-    loadReportData();
-  }, [token, dateRange, showToast]);
+    loadReports();
+  }, [token, startDate, endDate, showToast]);
 
-  const handleDateRangeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setDateRange(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleDownloadReport = (reportType: string) => {
-    showToast('info', 'Download Started', `Downloading ${reportType} report...`);
+  const handleDateRangeChange = async () => {
+    if (!token) return;
     
-    // In a real implementation, this would trigger a download
-    setTimeout(() => {
-      showToast('success', 'Download Complete', `${reportType} report downloaded successfully`);
-    }, 1500);
+    setIsLoadingCashFlow(true);
+    
+    try {
+      const cashFlowReport = await fetchCashFlowReport(token, startDate, endDate);
+      setCashFlowData(cashFlowReport);
+    } catch (error) {
+      showToast('error', 'Error', error instanceof Error ? error.message : 'Failed to load cash flow report');
+    } finally {
+      setIsLoadingCashFlow(false);
+    }
   };
 
-  // Colors for pie chart
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+  // Calculate totals for cash flow
+  const totalIncome = cashFlowData.reduce((sum, item) => sum + item.income, 0);
+  const totalExpense = cashFlowData.reduce((sum, item) => sum + item.expense, 0);
+  const netCashFlow = totalIncome - totalExpense;
 
-  if (isLoading) {
-    return (
-      <PageContainer title="Reports">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
-      </PageContainer>
-    );
-  }
+  // Calculate totals for loan status
+  const totalApplications = loanStatusData.reduce((sum, item) => sum + item.count, 0);
+  const approvedCount = loanStatusData.find(item => item.status === 'approved')?.count || 0;
+  const pendingCount = loanStatusData.find(item => item.status === 'pending')?.count || 0;
+  const rejectedCount = loanStatusData.find(item => item.status === 'rejected')?.count || 0;
 
   return (
     <PageContainer title="Reports">
       {/* Cash Flow Report */}
-      <Card className="mb-8">
-        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle>Cash Flow Report</CardTitle>
-            <p className="text-sm text-gray-500 mt-1">Income vs. Expenses over time</p>
-          </div>
-          
-          <div className="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-4 mt-4 md:mt-0">
-            <div className="flex items-center space-x-2">
-              <label htmlFor="startDate" className="text-sm font-medium text-gray-700">
-                From:
-              </label>
-              <input
-                type="date"
-                id="startDate"
-                name="startDate"
-                value={dateRange.startDate}
-                onChange={handleDateRangeChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary focus:border-primary"
-              />
-            </div>
+      <Card className="mb-6">
+        <CardHeader className="pb-0">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+            <CardTitle className="mb-4 md:mb-0">Cash Flow Report</CardTitle>
             
-            <div className="flex items-center space-x-2">
-              <label htmlFor="endDate" className="text-sm font-medium text-gray-700">
-                To:
-              </label>
-              <input
-                type="date"
-                id="endDate"
-                name="endDate"
-                value={dateRange.endDate}
-                onChange={handleDateRangeChange}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-primary focus:border-primary"
-              />
+            <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+              <div className="flex items-center space-x-2">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+                <span className="text-gray-500">to</span>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Calendar className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                </div>
+                <button
+                  onClick={handleDateRangeChange}
+                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+                  disabled={isLoadingCashFlow}
+                >
+                  {isLoadingCashFlow ? (
+                    <Loader2 className="animate-spin h-5 w-5" />
+                  ) : (
+                    'Apply'
+                  )}
+                </button>
+              </div>
+              
+              <button
+                className="flex items-center px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                <Download className="h-5 w-5 mr-2" />
+                Export
+              </button>
             </div>
-            
-            <button
-              onClick={() => handleDownloadReport('Cash Flow')}
-              className="flex items-center px-3 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary-dark"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Download
-            </button>
           </div>
         </CardHeader>
-        
-        <CardContent>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start">
-            <Info className="h-5 w-5 text-blue-500 mr-2 mt-0.5" />
-            <div>
-              <p className="text-sm text-blue-700">
-                <strong>Note:</strong> Income includes regular income and loan repayments. Expenses include regular expenses and loan disbursements.
-              </p>
+        <CardContent className="p-6">
+          {isLoadingCashFlow ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
             </div>
-          </div>
-          
-          <div className="h-80 bg-gray-50 rounded-lg p-4 flex items-center justify-center">
-            {cashFlowData.length > 0 ? (
-              <div className="w-full h-full">
-                <div className="text-center mb-4">
-                  <h3 className="text-lg font-medium">Cash Flow Chart</h3>
-                  <p className="text-sm text-gray-500">Income vs Expenses</p>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-green-700">Total Income</p><h3 className="text-2xl font-bold text-green-700">
+                    {formatCurrency(totalIncome)}
+                  </h3>
                 </div>
-                <div className="flex justify-center">
-                  <div className="flex space-x-4">
-                    <div className="flex items-center">
-                      <div className="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
-                      <span className="text-sm">Income</span>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
-                      <span className="text-sm">Expense</span>
-                    </div>
-                  </div>
+                
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-red-700">Total Expenses</p>
+                  <h3 className="text-2xl font-bold text-red-700">
+                    {formatCurrency(totalExpense)}
+                  </h3>
                 </div>
-                <div className="text-center mt-8 text-gray-500">
-                  <p>Chart visualization would appear here</p>
-                  <p className="text-sm mt-2">Data loaded successfully for the selected date range</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">No cash flow data available for the selected date range</p>
-              </div>
-            )}
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="flex items-center">
-                <div className="p-2 rounded-full bg-green-100 text-green-600 mr-3">
-                  <DollarSign className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Total Income</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {formatCurrency(
-                      cashFlowData.reduce((sum, item) => sum + item.income, 0)
-                    )}
+                
+                <div className={`p-4 rounded-lg ${
+                  netCashFlow >= 0 ? 'bg-blue-50' : 'bg-orange-50'
+                }`}>
+                  <p className={`text-sm font-medium ${
+                    netCashFlow >= 0 ? 'text-blue-700' : 'text-orange-700'
+                  }`}>
+                    Net Cash Flow
                   </p>
+                  <h3 className={`text-2xl font-bold ${
+                    netCashFlow >= 0 ? 'text-blue-700' : 'text-orange-700'
+                  }`}>
+                    {formatCurrency(Math.abs(netCashFlow))}
+                    {netCashFlow < 0 && ' (Deficit)'}
+                  </h3>
                 </div>
               </div>
-            </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <div className="flex items-center">
-                <div className="p-2 rounded-full bg-red-100 text-red-600 mr-3">
-                  <DollarSign className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Total Expenses</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {formatCurrency(
-                      cashFlowData.reduce((sum, item) => sum + item.expense, 0)
+              
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Income
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Expense
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Net
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {cashFlowData.length > 0 ? (
+                      cashFlowData.map((item, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {formatDate(item.date)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-green-600">
+                              {formatCurrency(item.income)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-red-600">
+                              {formatCurrency(item.expense)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className={`text-sm ${
+                              item.income - item.expense >= 0 ? 'text-blue-600' : 'text-orange-600'
+                            }`}>
+                              {formatCurrency(item.income - item.expense)}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="px-6 py-4 text-center text-sm text-gray-500"
+                        >
+                          No cash flow data available for the selected period
+                        </td>
+                      </tr>
                     )}
-                  </p>
-                </div>
+                  </tbody>
+                </table>
               </div>
-            </div>
-          </div>
+            </>
+          )}
         </CardContent>
       </Card>
       
       {/* Loan Applications Report */}
       <Card>
-        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle>Loan Applications Report</CardTitle>
-            <p className="text-sm text-gray-500 mt-1">Distribution by status</p>
-          </div>
-          
-          <button
-            onClick={() => handleDownloadReport('Loan Applications')}
-            className="flex items-center px-3 py-2 bg-primary text-white rounded-md text-sm hover:bg-primary-dark mt-4 md:mt-0"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            Download
-          </button>
-        </CardHeader>
-        
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="h-64 bg-gray-50 rounded-lg p-4 flex items-center justify-center">
-              {loanStatusData.length > 0 ? (
-                <div className="w-full h-full">
-                  <div className="text-center mb-4">
-                    <h3 className="text-lg font-medium">Application Status</h3>
-                    <p className="text-sm text-gray-500">Distribution by status</p>
-                  </div>
-                  <div className="flex justify-center">
-                    {loanStatusData.map((item, index) => (
-                      <div key={item.status} className="flex items-center mx-2">
-                        <div 
-                          className="w-4 h-4 rounded-full mr-2" 
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        ></div>
-                        <span className="text-sm">{item.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-center mt-8 text-gray-500">
-                    <p>Pie chart visualization would appear here</p>
-                    <p className="text-sm mt-2">Data loaded successfully</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center h-full">
-                  <p className="text-gray-500">No loan application data available</p>
-                </div>
-              )}
-            </div>
+        <CardHeader className="pb-0">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
+            <CardTitle className="mb-4 md:mb-0">Loan Applications Report</CardTitle>
             
-            <div className="flex flex-col justify-center">
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-gray-900">Summary</h3>
+            <button
+              className="flex items-center px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              <Download className="h-5 w-5 mr-2" />
+              Export
+            </button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6">
+          {isLoadingLoanStatus ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-gray-700">Total Applications</p>
+                  <h3 className="text-2xl font-bold text-gray-700">
+                    {totalApplications}
+                  </h3>
+                </div>
                 
-                <div className="grid grid-cols-1 gap-3">
-                  {loanStatusData.map((item, index) => (
-                    <div key={item.status} className="bg-gray-50 p-3 rounded-lg">
-                      <div className="flex items-center">
-                        <div 
-                          className="w-4 h-4 rounded-full mr-3" 
-                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                        ></div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">
-                            {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                          </p>
-                          <p className="text-lg font-bold text-gray-900">
-                            {item.count} applications
-                          </p>
-                        </div>
-                      </div>
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-green-700">Approved</p>
+                  <h3 className="text-2xl font-bold text-green-700">
+                    {approvedCount}
+                    <span className="text-sm font-normal ml-2">
+                      ({totalApplications > 0 ? Math.round((approvedCount / totalApplications) * 100) : 0}%)
+                    </span>
+                  </h3>
+                </div>
+                
+                <div className="bg-yellow-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-yellow-700">Pending</p>
+                  <h3 className="text-2xl font-bold text-yellow-700">
+                    {pendingCount}
+                    <span className="text-sm font-normal ml-2">
+                      ({totalApplications > 0 ? Math.round((pendingCount / totalApplications) * 100) : 0}%)
+                    </span>
+                  </h3>
+                </div>
+                
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-red-700">Rejected</p>
+                  <h3 className="text-2xl font-bold text-red-700">
+                    {rejectedCount}
+                    <span className="text-sm font-normal ml-2">
+                      ({totalApplications > 0 ? Math.round((rejectedCount / totalApplications) * 100) : 0}%)
+                    </span>
+                  </h3>
+                </div>
+              </div>
+              
+              <div className="flex flex-col md:flex-row gap-6">
+                <div className="w-full md:w-1/2">
+                  <h4 className="text-lg font-medium text-gray-700 mb-4">Loan Status Distribution</h4>
+                  <div className="bg-gray-50 p-6 rounded-lg h-64 flex items-center justify-center">
+                    <div className="text-center text-gray-500">
+                      <PieChart className="h-12 w-12 mx-auto mb-2" />
+                      <p>Pie chart visualization would be displayed here</p>
+                      <p className="text-sm">Showing distribution of loan application statuses</p>
                     </div>
-                  ))}
-                  
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="flex items-center">
-                      <div className="p-2 rounded-full bg-blue-100 text-blue-600 mr-3">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-500">Total Applications</p>
-                        <p className="text-lg font-bold text-gray-900">
-                          {loanStatusData.reduce((sum, item) => sum + item.count, 0)}
-                        </p>
-                      </div>
+                  </div>
+                </div>
+                
+                <div className="w-full md:w-1/2">
+                  <h4 className="text-lg font-medium text-gray-700 mb-4">Monthly Application Trend</h4>
+                  <div className="bg-gray-50 p-6 rounded-lg h-64 flex items-center justify-center">
+                    <div className="text-center text-gray-500">
+                      <BarChart3 className="h-12 w-12 mx-auto mb-2" />
+                      <p>Bar chart visualization would be displayed here</p>
+                      <p className="text-sm">Showing monthly trend of loan applications</p>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </PageContainer>
